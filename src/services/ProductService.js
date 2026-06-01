@@ -22,9 +22,13 @@ function normalizeProduct(product) {
     name: product.name,
     category: product.category ?? '',
     description: product.description ?? '',
-    thumbnail: product.thumbnail ?? '',
-    picture: product.picture ?? '',
+    thumbnail: product.thumbnail ?? product.thumbnail_url ?? '',
+    thumbnailUrl: product.thumbnailUrl ?? product.thumbnail_url ?? product.thumbnail ?? '',
+    picture: product.picture ?? product.image_url ?? '',
+    imageUrl: product.imageUrl ?? product.image_url ?? product.picture ?? '',
     quantityUnit: product.quantityUnit ?? product.quantity_unit ?? 'count',
+    packageWeightGrams: product.packageWeightGrams ?? product.package_weight_grams ?? null,
+    pricePerKg: product.pricePerKg ?? product.price_per_kg ?? null,
     ...product,
   }
 }
@@ -37,8 +41,12 @@ function normalizeProductPreview(product, priceByProductId = new Map()) {
   return {
     id,
     name: product.name ?? '',
-    thumbnail: product.thumbnail ?? '',
+    description: product.description ?? '',
+    thumbnail: product.thumbnail ?? product.thumbnail_url ?? '',
+    thumbnailUrl: product.thumbnailUrl ?? product.thumbnail_url ?? product.thumbnail ?? '',
     price: priceByProductId.get(id) ?? null,
+    pricePerKg: product.pricePerKg ?? product.price_per_kg ?? null,
+    packageWeightGrams: product.packageWeightGrams ?? product.package_weight_grams ?? null,
     quantityUnit: product.quantityUnit ?? product.quantity_unit ?? 'count',
   }
 }
@@ -48,7 +56,7 @@ async function getStoreProductRows(productIds, storeId) {
     return []
   }
 
-  let query = supabase.from(STORE_PRODUCTS_TABLE).select('product_id, price').in('product_id', productIds)
+  let query = supabase.from(STORE_PRODUCTS_TABLE).select('product_id, price, price_per_kg').in('product_id', productIds)
 
   if (storeId) {
     query = query.eq('store_id', storeId)
@@ -70,7 +78,7 @@ async function getStoreProductRowsForStore(storeId) {
 
   const { data, error } = await supabase
     .from(STORE_PRODUCTS_TABLE)
-    .select('product_id, price')
+    .select('product_id, price, price_per_kg')
     .eq('store_id', storeId)
 
   if (error) {
@@ -82,6 +90,10 @@ async function getStoreProductRowsForStore(storeId) {
 
 function getPriceByProductId(storeProductRows) {
   return new Map(storeProductRows.map((storeProduct) => [storeProduct.product_id, storeProduct.price ?? null]))
+}
+
+function getStoreProductByProductId(storeProductRows) {
+  return new Map(storeProductRows.map((storeProduct) => [storeProduct.product_id, storeProduct]))
 }
 
 async function cacheProductPreviews(previews) {
@@ -156,6 +168,29 @@ async function getProductLocation(productId, storeId) {
   return normalizeProductLocation(storeProduct, section)
 }
 
+async function getProductStorePricing(productId, storeId) {
+  if (!productId || !storeId) {
+    return { price: null, pricePerKg: null }
+  }
+
+  const { data, error } = await supabase
+    .from(STORE_PRODUCTS_TABLE)
+    .select('price, price_per_kg')
+    .eq('product_id', productId)
+    .eq('store_id', storeId)
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) {
+    return { price: null, pricePerKg: null }
+  }
+
+  return {
+    price: data.price ?? null,
+    pricePerKg: data.price_per_kg ?? null,
+  }
+}
+
 export const ProductService = {
   async getProducts({ select = '*', from, to, filters = {} } = {}) {
     // Start with a flexible select so screens can request either full rows or a
@@ -201,8 +236,11 @@ export const ProductService = {
       raiseSupabaseError(error)
     }
 
+    const storePricing = await getProductStorePricing(id, storeId)
     const product = {
       ...normalizeProduct(data),
+      price: storePricing.price,
+      pricePerKg: storePricing.pricePerKg,
       location: await getProductLocation(id, storeId),
     }
     await localDb.products.put(product)
@@ -228,7 +266,7 @@ export const ProductService = {
 
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
-        .select('product_id, name, thumbnail, quantity_unit')
+        .select('product_id, name, description, thumbnail_url, quantity_unit, package_weight_grams')
         .in('product_id', storeProductIds)
         .ilike('name', `%${searchTerm.trim()}%`)
         .limit(limit)
@@ -236,7 +274,16 @@ export const ProductService = {
       raiseSupabaseError(error)
 
       const priceByProductId = getPriceByProductId(storeProductRows)
-      const previews = (data ?? []).map((product) => normalizeProductPreview(product, priceByProductId))
+      const storeProductByProductId = getStoreProductByProductId(storeProductRows)
+      const previews = (data ?? []).map((product) =>
+        normalizeProductPreview(
+          {
+            ...product,
+            price_per_kg: storeProductByProductId.get(product.product_id)?.price_per_kg ?? null,
+          },
+          priceByProductId,
+        ),
+      )
 
       await cacheProductPreviews(previews)
 
@@ -245,7 +292,7 @@ export const ProductService = {
 
     const { data, error } = await supabase
       .from(PRODUCTS_TABLE)
-      .select('product_id, name, thumbnail, quantity_unit')
+      .select('product_id, name, description, thumbnail_url, quantity_unit, package_weight_grams')
       .ilike('name', `%${searchTerm.trim()}%`)
       .limit(limit)
 
@@ -253,8 +300,18 @@ export const ProductService = {
 
     const products = data ?? []
     const productIds = products.map((product) => product.product_id).filter(Boolean)
-    const priceByProductId = getPriceByProductId(await getStoreProductRows(productIds, storeId))
-    const previews = products.map((product) => normalizeProductPreview(product, priceByProductId))
+    const storeProductRows = await getStoreProductRows(productIds, storeId)
+    const priceByProductId = getPriceByProductId(storeProductRows)
+    const storeProductByProductId = getStoreProductByProductId(storeProductRows)
+    const previews = products.map((product) =>
+      normalizeProductPreview(
+        {
+          ...product,
+          price_per_kg: storeProductByProductId.get(product.product_id)?.price_per_kg ?? null,
+        },
+        priceByProductId,
+      ),
+    )
 
     await cacheProductPreviews(previews)
 

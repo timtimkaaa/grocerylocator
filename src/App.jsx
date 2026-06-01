@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   AppFrame,
   BottomNav,
@@ -9,7 +10,6 @@ import {
   MoreButton,
   PlusIcon,
   Screen,
-  SearchBox,
   SearchIcon,
   SectionHeading,
   TopBar,
@@ -20,240 +20,27 @@ import { supabase } from './lib/supabaseClient'
 import { ProductService } from './services/ProductService'
 import { PromotionService } from './services/PromotionService'
 import { ShoppingListService } from './services/ShoppingListService'
+import { RoutePlannerService } from './services/RoutePlannerService'
 import { StoreMapService } from './services/StoreMapService'
 import { StoreService } from './services/StoreService'
 import './App.css'
-
-const PROMOTION_SLOTS = 3
-const LIST_SLOTS = 3
-const LIST_ITEM_PREVIEW_LIMIT = 3
-const ROUTES = {
-  home: '#/',
-  lists: '#/lists',
-  newList: '#/lists/new',
-  search: '#/search',
-}
-
-function getRouteFromHash() {
-  if (window.location.hash === ROUTES.newList) {
-    return 'newList'
-  }
-
-  if (window.location.hash === ROUTES.search) {
-    return 'search'
-  }
-
-  return window.location.hash === ROUTES.lists ? 'lists' : 'home'
-}
-
-function formatDate(value) {
-  if (!value) {
-    return 'Limited time'
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Limited time'
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(date)
-}
-
-function formatListItem(item, productNamesById) {
-  const productName = productNamesById[item.productId] ?? `Product ${item.productId}`
-
-  return `${productName} x ${item.quantity}`
-}
-
-function formatLastEditDate(value) {
-  if (!value) {
-    return 'Last edited date unavailable'
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Last edited date unavailable'
-  }
-
-  return `Last edited ${new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)}`
-}
-
-function PromotionCard({ promotion }) {
-  const imageUrl = promotion.picture || promotion.product?.thumbnail
-
-  return (
-    <article className="promotion-card">
-      <div className="promo-art">
-        {imageUrl ? <img src={imageUrl} alt="" /> : <span className="promo-symbol">%</span>}
-      </div>
-      <div className="promo-copy">
-        <span className="card-kicker">{formatDate(promotion.validUntil)}</span>
-        <h3>{promotion.product?.name || 'Store promotion'}</h3>
-        <p>{promotion.discountValue ?? promotion.description ?? 'Special offer'}</p>
-      </div>
-    </article>
-  )
-}
-
-function PromotionsSection({ isLoading, promotions }) {
-  const visiblePromotions = promotions.slice(0, PROMOTION_SLOTS)
-
-  return (
-    <section className="section-block" aria-labelledby="promotions-title">
-      <SectionHeading
-        actionLabel="View all"
-        eyebrow="Best prices"
-        title="Hot promotions"
-        titleId="promotions-title"
-      />
-      {isLoading ? (
-        <InlineState>Loading promotions...</InlineState>
-      ) : visiblePromotions.length > 0 ? (
-        <div className="promotion-strip">
-          {visiblePromotions.map((promotion) => (
-            <PromotionCard promotion={promotion} key={promotion.id} />
-          ))}
-        </div>
-      ) : (
-        <InlineState>No promotions available for this store.</InlineState>
-      )}
-    </section>
-  )
-}
-
-function ListRow({ list, productNamesById }) {
-  const name = list.name || 'Untitled list'
-  const itemPreview = list.items
-    .slice(0, LIST_ITEM_PREVIEW_LIMIT)
-    .map((item) => formatListItem(item, productNamesById))
-    .join(', ')
-
-  return (
-    <article className="list-row">
-      <ListIcon />
-      <div>
-        <h3>{name}</h3>
-        <p>{itemPreview || `${list.items.length} items`}</p>
-      </div>
-      <MoreButton label={`More options for ${name}`} />
-    </article>
-  )
-}
-
-function AddListRow({ isCard = false, onCreate }) {
-  return (
-    <button className={`add-list-button ${isCard ? 'add-list-card' : ''}`.trim()} type="button" onClick={onCreate}>
-      <span className="add-list-icon" aria-hidden="true">
-        +
-      </span>
-      <span>Add new list</span>
-    </button>
-  )
-}
-
-function ListsSection({ isLoading, lists, onCreateList, onViewAll, productNamesById, session }) {
-  const visibleLists = lists.slice(0, LIST_SLOTS)
-
-  return (
-    <section className="section-block" aria-labelledby="lists-title">
-      <SectionHeading
-        actionLabel="View all"
-        eyebrow="Planning"
-        onAction={onViewAll}
-        title="Your lists"
-        titleId="lists-title"
-      />
-
-      {isLoading ? (
-        <InlineState>Loading shopping lists...</InlineState>
-      ) : !session ? (
-        <InlineState>Sign in to load your saved shopping lists.</InlineState>
-      ) : (
-        <div className="list-panel">
-          {visibleLists.length > 0 ? (
-            visibleLists.map((list) => (
-              <ListRow list={list} key={list.id} productNamesById={productNamesById} />
-            ))
-          ) : (
-            <article className="list-row empty-list-row">
-              <ListIcon variant="muted" />
-              <div>
-                <h3>No shopping lists yet</h3>
-                <p>Create your first list below</p>
-              </div>
-            </article>
-          )}
-          <AddListRow onCreate={onCreateList} />
-        </div>
-      )}
-    </section>
-  )
-}
-
-function StoreMapPreview({ isLoading, storeMap }) {
-  return (
-    <section className="section-block map-block" aria-labelledby="map-title">
-      <SectionHeading actionLabel="Open" eyebrow="In store" title="Store map" titleId="map-title" />
-      <div className="map-preview" aria-label="Store map preview">
-        {storeMap ? <MiniMap storeMap={storeMap} /> : <MapEmptyState isLoading={isLoading} />}
-      </div>
-    </section>
-  )
-}
-
-function SearchEntry({ onOpenSearch }) {
-  return (
-    <button className="search-entry" type="button" onClick={onOpenSearch}>
-      <SearchIcon />
-      <span>Search products, aisles, lists</span>
-    </button>
-  )
-}
-
-function MiniMap({ storeMap }) {
-  return (
-    <div className="mini-map" style={{ gridTemplateColumns: `repeat(${storeMap.width}, minmax(0, 1fr))` }}>
-      {storeMap.cells.flatMap((row) =>
-        row.map((cell) => (
-          <span
-            className={[
-              'mini-cell',
-              cell.section ? 'section-cell' : '',
-              cell.section?.hasProducts ? 'product-cell' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            key={`${cell.x}-${cell.y}`}
-            title={cell.section?.name ?? 'Walkspace'}
-          />
-        )),
-      )}
-    </div>
-  )
-}
-
-function MapEmptyState({ isLoading }) {
-  return (
-    <div className="map-empty">
-      <span />
-      <p>{isLoading ? 'Map loading' : 'No store map available'}</p>
-    </div>
-  )
-}
+import { MiniMap, MapEmptyState } from './components/store-map.jsx'
+import { AddListRow, ListsSection, PromotionsSection, SearchEntry, StoreMapPreview } from './components/home-components.jsx'
+import { AllListCard, AllListsGroup, DeleteListDialog, ListContextMenu, RenameListDialog, ShoppingListItemRow } from './components/list-components.jsx'
+import { NavigationRouteOverlay } from './components/navigation-components.jsx'
+import { AddToListDialog, SearchResultRow } from './components/search-components.jsx'
+import { FeaturedPromotion, PromotionTile } from './components/promotion-components.jsx'
+import { SideMenu } from './components/SideMenu.jsx'
+import { PROMOTION_LOAD_LIMIT, ROUTES } from './constants.js'
+import { formatDate, formatPricePerKg, formatProductPrice, getListTotal, getNumericQuantity, getPromotionDescription, getPromotionImage, getPromotionName } from './utils/formatting.js'
+import { getListDetailRoute, getListNavigationRoute, getProductDetailRoute, getProductLocateRoute, getPromotionDetailRoute } from './utils/routes.js'
+import { clearStoredSelectedStoreId, readStoredSelectedStoreId, writeStoredSelectedStoreId } from './utils/selectedStoreStorage.js'
 
 function HomeScreen({
   isHomeLoading,
   isListLoading,
   message,
+  onOpenMenu,
   onNavigate,
   productNamesById,
   promotions,
@@ -264,21 +51,27 @@ function HomeScreen({
 }) {
   return (
     <Screen label="Home">
-      <TopBar title="Home" userEmail={userEmail} />
+      <TopBar hideProfile onMenuOpen={onOpenMenu} title="Home" userEmail={userEmail} />
 
       <Content>
         <SearchEntry onOpenSearch={() => onNavigate('search')} />
         {message ? <p className="data-message">{message}</p> : null}
-        <PromotionsSection isLoading={isHomeLoading} promotions={promotions} />
+        <PromotionsSection
+          isLoading={isHomeLoading}
+          onOpenPromotion={(promotionId) => onNavigate('promotionDetail', promotionId)}
+          onViewAll={() => onNavigate('promotions')}
+          promotions={promotions}
+        />
         <ListsSection
           isLoading={isListLoading}
           lists={shoppingLists}
           onCreateList={() => onNavigate('newList')}
+          onOpenList={(listId) => onNavigate('listDetail', listId)}
           onViewAll={() => onNavigate('lists')}
           productNamesById={productNamesById}
           session={session}
         />
-        <StoreMapPreview isLoading={isHomeLoading} storeMap={storeMap} />
+        <StoreMapPreview isLoading={isHomeLoading} onOpenMap={() => onNavigate('map')} storeMap={storeMap} />
       </Content>
 
       <BottomNav activeView="home" onNavigate={onNavigate} />
@@ -286,42 +79,132 @@ function HomeScreen({
   )
 }
 
-function ListContextMenu({ onDelete, onRename }) {
+function ProductLocateOverlay({ product, storeMap }) {
+  const location = product?.location
+
+  if (!location || !storeMap) {
+    return null
+  }
+
+  const point = {
+    x: Number(location.x) + 0.5,
+    y: Number(location.y) + 0.5,
+  }
+
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    return null
+  }
+
   return (
-    <div className="list-context-menu" role="menu">
-      <button type="button" role="menuitem" onClick={onRename}>
-        Rename list
-      </button>
-      <button className="danger-menu-item" type="button" role="menuitem" onClick={onDelete}>
-        Delete list
-      </button>
-    </div>
+    <svg
+      className="navigation-route-overlay"
+      viewBox={`0 0 ${storeMap.width} ${storeMap.length}`}
+      aria-hidden="true"
+      style={{
+        '--navigation-map-width': storeMap.width,
+        '--navigation-map-length': storeMap.length,
+      }}
+    >
+      <g className="navigation-route-pin next" transform={`translate(${point.x} ${point.y})`}>
+        <path d="M0 0s-.58-.56-.58-.96A.58.58 0 0 1 0-1.52a.58.58 0 0 1 .58.56C.58-.56 0 0 0 0Z" />
+        <circle cx="0" cy="-.96" r=".2" />
+      </g>
+    </svg>
   )
 }
 
-function AllListCard({ isMenuOpen, list, onDelete, onMenuToggle, onRename }) {
-  const name = list.name || 'Untitled list'
-
+function StoreMapScreen({ isLoading, onBack, onNavigate, storeMap }) {
+  // The map screen uses a simple detail header: back navigation on the left,
+  // centered title, and an empty right spacer to keep the title balanced.
   return (
-    <article className="all-list-card">
-      <div className="all-list-card-copy">
-        <h3>{name}</h3>
-        <p>{formatLastEditDate(list.updatedAt ?? list.createdAt)}</p>
-      </div>
-      <MoreButton label={`More options for ${name}`} onClick={onMenuToggle} />
-      {isMenuOpen ? <ListContextMenu onDelete={onDelete} onRename={onRename} /> : null}
-    </article>
+    <Screen label="Store map">
+      <header className="map-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
+        </button>
+        <h1>Store map</h1>
+        <span aria-hidden="true" />
+      </header>
+
+      <Content className="store-map-content">
+        <section className="store-map-screen" aria-label="Store section map">
+          <div className="map-stage" aria-label="Store section groups">
+            {storeMap ? <MiniMap storeMap={storeMap} /> : <MapEmptyState isLoading={isLoading} />}
+          </div>
+        </section>
+      </Content>
+
+      <BottomNav activeView="home" onNavigate={onNavigate} />
+    </Screen>
   )
 }
 
-function AllListsGroup({ children, title }) {
+function LocateScreen({ onBack, onNavigate, productId, selectedStoreId, storeMap }) {
+  const [product, setProduct] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isCurrent = true
+
+    async function loadProduct() {
+      setIsLoading(true)
+      setError('')
+
+      try {
+        const loadedProduct = await ProductService.getProductById(productId, {
+          storeId: selectedStoreId,
+        })
+
+        if (isCurrent) {
+          setProduct(loadedProduct)
+        }
+      } catch (error) {
+        if (isCurrent) {
+          setProduct(null)
+          setError(error.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadProduct()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [productId, selectedStoreId])
+
+  const title = product?.name || 'Locate product'
+
   return (
-    <section className="all-lists-section" aria-labelledby={`${title.toLowerCase().replace(/\s+/g, '-')}-title`}>
-      <h2 className="all-lists-title" id={`${title.toLowerCase().replace(/\s+/g, '-')}-title`}>
-        {title}:
-      </h2>
-      <div className="all-lists-group">{children}</div>
-    </section>
+    <Screen label="Locate product">
+      <header className="map-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
+        </button>
+        <h1>{title}</h1>
+        <span aria-hidden="true" />
+      </header>
+
+      <Content className="store-map-content">
+        {error ? <p className="form-error">{error}</p> : null}
+        <section className="store-map-screen" aria-label="Product location map">
+          <div className="map-stage" aria-label="Product location">
+            {storeMap ? (
+              <MiniMap overlay={<ProductLocateOverlay product={product} storeMap={storeMap} />} storeMap={storeMap} />
+            ) : (
+              <MapEmptyState isLoading={isLoading} />
+            )}
+          </div>
+        </section>
+      </Content>
+
+      <BottomNav activeView="home" onNavigate={onNavigate} />
+    </Screen>
   )
 }
 
@@ -335,7 +218,10 @@ function AllListsScreen({
   onConfirmDeleteList,
   onConfirmRenameList,
   onDeleteList,
+  onOpenList,
+  onOpenMenu,
   onNavigate,
+  onQuantityChange,
   onRenameList,
   onRenameDraftChange,
   onToggleListMenu,
@@ -352,11 +238,12 @@ function AllListsScreen({
             <IconButton label="Add list" onClick={() => onNavigate('newList')}>
               <PlusIcon />
             </IconButton>
-            <IconButton label="Search lists" onClick={() => onNavigate('search')}>
+            <IconButton label="Search lists" onClick={() => onNavigate('listSearch')}>
               <SearchIcon />
             </IconButton>
           </TopBarActions>
         }
+        onMenuOpen={onOpenMenu}
         title="All lists"
       />
 
@@ -378,6 +265,7 @@ function AllListsScreen({
                     key={list.id}
                     onDelete={() => onDeleteList(list)}
                     onMenuToggle={() => onToggleListMenu(list.id)}
+                    onOpen={onOpenList}
                     onRename={() => onRenameList(list)}
                   />
                 ))
@@ -414,96 +302,426 @@ function AllListsScreen({
   )
 }
 
-function RenameListDialog({ list, name, onCancel, onChange, onConfirm }) {
-  return (
-    <div className="dialog-backdrop" role="presentation">
-      <form className="dialog-panel" onSubmit={onConfirm} role="dialog" aria-modal="true" aria-labelledby="rename-title">
-        <div>
-          <p className="eyebrow">Edit list</p>
-          <h2 id="rename-title">Rename list</h2>
-        </div>
+function ListSearchScreen({ onBack, onOpenList, shoppingLists }) {
+  const [query, setQuery] = useState('')
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredLists = normalizedQuery
+    ? shoppingLists.filter((list) => (list.name || 'Untitled list').toLowerCase().includes(normalizedQuery))
+    : shoppingLists
 
-        <label>
-          <span>List name</span>
+  return (
+    <Screen label="Search lists">
+      <header className="list-search-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
+        </button>
+        <h1>Search lists</h1>
+        <span aria-hidden="true" />
+      </header>
+
+      <Content className="list-search-content">
+        <label className="list-search-input" aria-label="Search your lists">
+          <SearchIcon />
           <input
             autoFocus
-            type="text"
-            value={name}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={list.name || 'Untitled list'}
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search your lists"
           />
         </label>
 
-        <div className="dialog-actions">
-          <button className="secondary-action" type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="primary-action" type="submit">
-            Rename
-          </button>
-        </div>
-      </form>
-    </div>
+        <section className="list-search-results" aria-label="Matching lists">
+          {filteredLists.length > 0 ? (
+            filteredLists.map((list) => (
+              <button className="list-search-result" type="button" key={list.id} onClick={() => onOpenList(list.id)}>
+                <ListIcon />
+                <span>
+                  <strong>{list.name || 'Untitled list'}</strong>
+                  <small>{list.items.length} items</small>
+                </span>
+              </button>
+            ))
+          ) : (
+            <InlineState>No matching lists.</InlineState>
+          )}
+        </section>
+      </Content>
+    </Screen>
   )
 }
 
-function DeleteListDialog({ list, onCancel, onConfirm }) {
+function ListDetailScreen({
+  isMenuOpen,
+  list,
+  onBack,
+  onDeleteList,
+  onMenuToggle,
+  onNavigate,
+  onQuantityChange,
+  onRenameList,
+  onRemoveItem,
+  productDetailsById,
+  productNamesById,
+}) {
+  const listName = list?.name || 'List'
+  const items = list?.items ?? []
+  const listTotal = getListTotal(items, productDetailsById)
+  const listTotalLabel = formatProductPrice(listTotal)
+  const [expandedItemId, setExpandedItemId] = useState('')
+
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <div className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <Screen label="List details">
+      <header className="list-detail-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
+        </button>
         <div>
-          <p className="eyebrow">Delete list</p>
-          <h2 id="delete-title">Delete "{list.name || 'Untitled list'}"?</h2>
+          <p>Shopping list</p>
+          <h1>{listName}</h1>
         </div>
-
-        <p className="dialog-copy">This removes the list and its items from your account.</p>
-
-        <div className="dialog-actions">
-          <button className="secondary-action" type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="danger-action" type="button" onClick={onConfirm}>
-            Delete
-          </button>
+        <div className="list-detail-actions">
+          <IconButton label="Add product to list" onClick={() => onNavigate('search', undefined, { sourceListId: list?.id })}>
+            <PlusIcon />
+          </IconButton>
+          <MoreButton label="List options" onClick={onMenuToggle} />
+          {isMenuOpen && list ? <ListContextMenu onDelete={() => onDeleteList(list)} onRename={() => onRenameList(list)} /> : null}
         </div>
+      </header>
+
+      <Content className="list-detail-content">
+        {!list ? (
+          <InlineState>List not found.</InlineState>
+        ) : items.length > 0 ? (
+          <section className="shopping-list-items" aria-label="Shopping list products">
+            {items.map((item) => (
+              <ShoppingListItemRow
+                isExpanded={expandedItemId === (item.id ?? `${item.productId}-${item.quantity}`)}
+                item={item}
+                key={item.id ?? `${item.productId}-${item.quantity}`}
+                onNavigate={onNavigate}
+                onQuantityChange={onQuantityChange}
+                onRemove={onRemoveItem}
+                onToggle={() => {
+                  // One row is open at a time to keep the list readable and
+                  // close to the compact single-column mockup layout.
+                  const itemKey = item.id ?? `${item.productId}-${item.quantity}`
+                  setExpandedItemId((currentItemId) => (currentItemId === itemKey ? '' : itemKey))
+                }}
+                productDetailsById={productDetailsById}
+                productNamesById={productNamesById}
+              />
+            ))}
+          </section>
+        ) : (
+          <InlineState>This list has no products yet.</InlineState>
+        )}
+      </Content>
+
+      <button
+        className="list-route-floating"
+        type="button"
+        aria-label="Start list route"
+        disabled={items.length === 0}
+        onClick={() => items.length > 0 && list && onNavigate('navigation', list.id)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="6" cy="18" r="2" />
+          <circle cx="18" cy="6" r="2" />
+          <path d="M8 18h3.5a3 3 0 0 0 0-6H11a3 3 0 0 1 0-6h5" />
+        </svg>
+      </button>
+
+      <div className="list-total-bar">
+        <span>Total:</span>
+        <strong>{listTotalLabel ?? '--'}</strong>
       </div>
-    </div>
+
+      <BottomNav activeView="lists" onNavigate={onNavigate} />
+    </Screen>
   )
 }
 
-function SearchScreen({ onNavigate }) {
-  const [expandedResultId, setExpandedResultId] = useState('2')
-  const results = [
-    {
-      id: '1',
-      name: 'Milk UHT 2,0% Milktown',
-      price: '$5',
-      unitPrice: '$5/L',
-    },
-    {
-      id: '2',
-      name: 'Milk fresh 2,0% MeinMilch',
-      price: '$7',
-      unitPrice: '$7/L',
-    },
-    {
-      id: '3',
-      name: 'Milk HealthFarm',
-      price: '$10',
-      unitPrice: '$10/L',
-    },
-    ...Array.from({ length: 4 }, (_, index) => ({
-      id: `placeholder-${index}`,
-      name: '',
-      price: '',
-      unitPrice: '',
-    })),
-  ]
+function NavigationScreen({ list, onBack, onNavigate, productDetailsById, productNamesById, storeMap }) {
+  const items = list?.items ?? []
+  const mapStageRef = useRef(null)
+  const [isRouteListExpanded, setIsRouteListExpanded] = useState(false)
+  const [collectedItemIds, setCollectedItemIds] = useState([])
+  const [completedRoutePaths, setCompletedRoutePaths] = useState([])
+  const [routeStart, setRouteStart] = useState(null)
+  const [isFinished, setIsFinished] = useState(false)
+  const toggleRouteList = () => setIsRouteListExpanded((currentValue) => !currentValue)
+  const getItemKey = (item) => item.id ?? `${item.productId}-${item.quantity}`
+  const activeItems = items.filter((item) => !collectedItemIds.includes(getItemKey(item)))
+  const collectedItems = items.filter((item) => collectedItemIds.includes(getItemKey(item)))
+  const totalStops = Math.max(items.length, 1)
+  const routeProducts = activeItems.map((item) => productDetailsById[item.productId]).filter(Boolean)
+  const routePlan = useMemo(
+    () => (storeMap ? RoutePlannerService.calculateRoute(storeMap, routeProducts, { start: routeStart }) : null),
+    [routeProducts, routeStart, storeMap],
+  )
+  const orderedActiveItems = useMemo(() => {
+    const remainingItems = [...activeItems]
+
+    if (!routePlan?.orderedProducts?.length) {
+      return activeItems
+    }
+
+    return routePlan.orderedProducts
+      .map((product) => {
+        const productId = product.id ?? product.product_id
+        const itemIndex = remainingItems.findIndex((item) => String(item.productId) === String(productId))
+
+        if (itemIndex < 0) return null
+
+        const [item] = remainingItems.splice(itemIndex, 1)
+        return item
+      })
+      .filter(Boolean)
+      .concat(remainingItems)
+  }, [activeItems, routePlan])
+  const nextItem = orderedActiveItems[0]
+  const nextProductName = nextItem
+    ? productDetailsById[nextItem.productId]?.name ?? productNamesById[nextItem.productId] ?? `Product ${nextItem.productId}`
+    : items.length > 0 ? 'Checkout' : 'No product selected'
+  const routeProgressLabel = items.length > 0 ? `${Math.min(collectedItems.length + 1, items.length)}/${items.length}` : '0/0'
+  const visibleActiveItems = orderedActiveItems.slice(0, 4)
+  const visibleCollectedItems = collectedItems.slice(0, 4)
+
+  useEffect(() => {
+    const viewport = mapStageRef.current?.querySelector('.map-viewport')
+
+    if (!viewport) return
+
+    requestAnimationFrame(() => {
+      viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2)
+      viewport.scrollTop = 0
+    })
+  }, [storeMap?.storeId])
+
+  function markItemCollected(item) {
+    const itemKey = getItemKey(item)
+    const product = productDetailsById[item.productId]
+    const productId = product?.id ?? product?.product_id ?? item.productId
+    const segmentIndex = routePlan?.segments?.findIndex((segment) => {
+      const segmentProductId = segment.product?.id ?? segment.product?.product_id
+      return segmentProductId && String(segmentProductId) === String(productId)
+    }) ?? -1
+    const completedPath = segmentIndex >= 0
+      ? routePlan.segments.slice(0, segmentIndex + 1).flatMap((segment, index) =>
+          index === 0 ? segment.path ?? [] : (segment.path ?? []).slice(1),
+        )
+      : []
+
+    if (completedPath.length > 0) {
+      setCompletedRoutePaths((currentPaths) => [...currentPaths, completedPath])
+    }
+
+    if (product?.location) {
+      setRouteStart(product.location)
+    }
+
+    setCollectedItemIds((currentIds) => (currentIds.includes(itemKey) ? currentIds : [...currentIds, itemKey]))
+  }
+
+  function renderRouteItem(item, index, options = {}) {
+    const product = productDetailsById[item.productId]
+    const productName = product?.name ?? productNamesById[item.productId] ?? `Product ${item.productId}`
+    const isCompleted = options.completed
+
+    return (
+      <article className={`${index === 0 && !isCompleted ? 'active' : ''} ${isCompleted ? 'completed' : ''}`.trim()} key={getItemKey(item)}>
+        <span>{index + 1}</span>
+        <div>
+          <h3>{productName}</h3>
+          <p>{product?.location?.sectionName || (isCompleted ? 'Collected' : index === 0 ? 'Current destination' : 'Upcoming stop')}</p>
+        </div>
+        <button
+          type="button"
+          aria-label={isCompleted ? `${productName} collected` : `Mark ${productName} as collected`}
+          disabled={isCompleted}
+          onClick={() => markItemCollected(item)}
+        >
+          <span />
+        </button>
+      </article>
+    )
+  }
+
+  if (isFinished) {
+    return (
+      <Screen label="Route complete">
+        <div className="navigation-complete-screen">
+          <div className="navigation-complete-mark" aria-hidden="true">
+            <span />
+          </div>
+          <p className="eyebrow">Route complete</p>
+          <h1>Great shopping</h1>
+          <p>
+            You collected <strong>{collectedItems.length}</strong> of <strong>{items.length}</strong> products from {list?.name || 'this list'}.
+          </p>
+          <button type="button" onClick={() => onNavigate('home')}>
+            Back to home
+          </button>
+        </div>
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen label="List navigation">
+      <div className="navigation-screen">
+        <div className="navigation-map-background" aria-hidden="true" ref={mapStageRef}>
+          {storeMap ? (
+            <MiniMap
+              overlay={<NavigationRouteOverlay completedPaths={completedRoutePaths} routePlan={routePlan} storeMap={storeMap} />}
+              storeMap={storeMap}
+            />
+          ) : (
+            <MapEmptyState isLoading={false} />
+          )}
+        </div>
+
+        <header className="navigation-top-bar">
+          <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+            <span />
+          </button>
+          <div>
+            <p>Route</p>
+            <h1>{list?.name || 'Shopping route'}</h1>
+          </div>
+          <button className="navigation-top-action" type="button" aria-label="Route options">
+            <span />
+            <span />
+            <span />
+          </button>
+        </header>
+
+        <section className="navigation-status-card" aria-label="Route status">
+          <div>
+            <p>{orderedActiveItems.length > 0 ? 'Next stop' : items.length > 0 ? 'Finish' : 'Next stop'}</p>
+            <h2>{nextProductName}</h2>
+          </div>
+          <strong>{routeProgressLabel}</strong>
+        </section>
+
+        <section className={`navigation-bottom-sheet ${isRouteListExpanded ? 'expanded' : ''}`.trim()} aria-label="Route steps">
+          <button
+            className="navigation-sheet-handle"
+            type="button"
+            aria-label={isRouteListExpanded ? 'Collapse route list' : 'Expand route list'}
+            onClick={toggleRouteList}
+          />
+          <button
+            className="navigation-summary"
+            type="button"
+            aria-expanded={isRouteListExpanded}
+            onClick={toggleRouteList}
+          >
+            <div>
+              <p>Estimated route</p>
+              <h2>{totalStops} stops</h2>
+            </div>
+            <span className="navigation-summary-chevron" aria-hidden="true" />
+          </button>
+
+          <div className="navigation-step-list">
+            {visibleActiveItems.length > 0 ? (
+              visibleActiveItems.map((item, index) => renderRouteItem(item, index))
+            ) : (
+              <InlineState>{items.length > 0 ? 'All visible stops are collected.' : 'Add products to this list to preview a route.'}</InlineState>
+            )}
+            {visibleCollectedItems.length > 0 ? (
+              <section className="navigation-completed-section" aria-label="Collected items">
+                <h3>Collected</h3>
+                {visibleCollectedItems.map((item, index) => renderRouteItem(item, index, { completed: true }))}
+              </section>
+            ) : null}
+          </div>
+          <button className="navigation-finish-button" type="button" onClick={() => setIsFinished(true)}>Finish</button>
+        </section>
+      </div>
+    </Screen>
+  )
+}
+
+function SearchScreen({ onAddProductToList, onBack, onNavigate, onSearchStateChange, searchState, selectedStoreId, shoppingLists }) {
+  const location = useLocation()
+  const [expandedResultId, setExpandedResultId] = useState(searchState.expandedResultId)
+  const [query, setQuery] = useState(searchState.query)
+  const [results, setResults] = useState(searchState.results)
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
+  const [addDialogProduct, setAddDialogProduct] = useState(null)
+  const [addDialogError, setAddDialogError] = useState('')
+  const [isAddingToList, setIsAddingToList] = useState(false)
+  const sourceListId = location.state?.sourceListId ?? ''
+
+  useEffect(() => {
+    onSearchStateChange({
+      expandedResultId,
+      query,
+      results,
+    })
+  }, [expandedResultId, onSearchStateChange, query, results])
+
+  useEffect(() => {
+    const trimmedQuery = query.trim()
+
+    if (!trimmedQuery) {
+      setResults([])
+      setExpandedResultId('')
+      setSearchError('')
+      return
+    }
+
+    let isCurrent = true
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearching(true)
+      setSearchError('')
+
+      try {
+        const products = await ProductService.getProductPreviewsForSearch(trimmedQuery, {
+          limit: 20,
+          storeId: selectedStoreId,
+        })
+
+        if (isCurrent) {
+          setResults(products)
+          setExpandedResultId((currentId) =>
+            products.some((product) => String(product.id) === String(currentId)) ? currentId : '',
+          )
+        }
+      } catch (error) {
+        if (isCurrent) {
+          setResults([])
+          setExpandedResultId('')
+          setSearchError(error.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setIsSearching(false)
+        }
+      }
+    }, 250)
+
+    return () => {
+      isCurrent = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [query, selectedStoreId])
+
+  const visibleResults = isSearching
+    ? Array.from({ length: 4 }, (_, index) => ({
+        id: `loading-${index}`,
+        name: '',
+      }))
+    : results
 
   return (
     <Screen label="Search">
       <header className="search-top-bar">
-        <button className="back-button" type="button" aria-label="Back" onClick={() => onNavigate('home')}>
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
           <span />
         </button>
         <h1>Search</h1>
@@ -513,10 +731,13 @@ function SearchScreen({ onNavigate }) {
         <div className="search-screen-content">
           <div className="search-field">
             <SearchIcon />
-            <span>Milk</span>
-            <button type="button" aria-label="Clear search">
-              <span />
-            </button>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search products"
+              aria-label="Search products"
+            />
           </div>
 
           <div className="search-controls" aria-label="Search controls">
@@ -524,107 +745,320 @@ function SearchScreen({ onNavigate }) {
             <button type="button">Filter</button>
           </div>
 
-          <h2 className="search-results-title">Results for “Product” (7)</h2>
+          <h2 className="search-results-title">
+            {query.trim() ? `Results for "${query.trim()}" (${results.length})` : 'Search products'}
+          </h2>
 
-          <div className="search-results-list">
-            {results.map((result) => (
-              <SearchResultRow
-                isExpanded={expandedResultId === result.id}
-                onToggle={() => setExpandedResultId((currentId) => (currentId === result.id ? '' : result.id))}
-                result={result}
-                key={result.id}
-              />
-            ))}
-          </div>
+          {searchError ? <InlineState>{searchError}</InlineState> : null}
+
+          {!searchError && !isSearching && query.trim() && results.length === 0 ? (
+            <InlineState>No products found in this store.</InlineState>
+          ) : null}
+
+          {!searchError && visibleResults.length > 0 ? (
+            <div className="search-results-list">
+              {visibleResults.map((result) => (
+                <SearchResultRow
+                  isExpanded={expandedResultId === result.id}
+                  onAddToList={setAddDialogProduct}
+                  onNavigate={onNavigate}
+                  onToggle={() => setExpandedResultId((currentId) => (currentId === result.id ? '' : result.id))}
+                  result={result}
+                  key={result.id}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </Content>
+
+      {addDialogProduct ? (
+        <AddToListDialog
+          defaultListId={sourceListId}
+          error={addDialogError}
+          isSubmitting={isAddingToList}
+          lists={shoppingLists}
+          onCancel={() => {
+            setAddDialogProduct(null)
+            setAddDialogError('')
+          }}
+          onConfirm={async ({ listId, quantity }) => {
+            setAddDialogError('')
+            setIsAddingToList(true)
+
+            try {
+              await onAddProductToList(listId, addDialogProduct.id, quantity)
+              setAddDialogProduct(null)
+            } catch (error) {
+              setAddDialogError(error.message)
+            } finally {
+              setIsAddingToList(false)
+            }
+          }}
+          product={addDialogProduct}
+        />
+      ) : null}
 
       <BottomNav activeView="home" onNavigate={onNavigate} />
     </Screen>
   )
 }
 
-function SearchResultRow({ isExpanded, onToggle, result }) {
-  const isPlaceholder = !result.name
+function PromotionsScreen({ isLoading, message, onNavigate, onOpenMenu, promotions }) {
+  const featuredPromotion = promotions[0]
+  const hotPromotions = promotions.slice(1)
 
   return (
-    <article className={`search-result-row ${isExpanded ? 'expanded' : ''}`.trim()}>
-      <div className="search-result-main">
-        <div className="result-image" aria-hidden="true">
-          <span />
-        </div>
-        <div className="result-copy">
-          {isPlaceholder ? (
-            <>
-              <span className="result-line long" />
-              <span className="result-line short" />
-            </>
+    <Screen label="Promotions">
+      <TopBar hideProfile onMenuOpen={onOpenMenu} title="Promotions" />
+
+      <Content>
+        <div className="promotions-screen-content">
+          {message ? <p className="data-message">{message}</p> : null}
+
+          {isLoading ? (
+            <InlineState>Loading promotions...</InlineState>
           ) : (
             <>
-              <h3>{result.name}</h3>
-              <p>
-                <strong>{result.price}</strong>
-                <span>{result.unitPrice}</span>
-              </p>
+              <FeaturedPromotion
+                onOpen={(promotionId) => onNavigate('promotionDetail', promotionId)}
+                promotion={featuredPromotion}
+              />
+
+              <section className="section-block" aria-labelledby="hot-promotions-screen-title">
+                <SectionHeading eyebrow="Best prices" title="Hot promotions" titleId="hot-promotions-screen-title" />
+                {hotPromotions.length > 0 ? (
+                  <div className="promo-tile-grid">
+                    {hotPromotions.map((promotion) => (
+                      <PromotionTile
+                        onOpen={(promotionId) => onNavigate('promotionDetail', promotionId)}
+                        promotion={promotion}
+                        key={promotion.id}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <InlineState>No more promotions available for this store.</InlineState>
+                )}
+              </section>
+
             </>
           )}
         </div>
-        <button className="result-add-button" type="button" aria-label="Add product">
-          <span />
-        </button>
-        <button
-          className="result-expand-button"
-          type="button"
-          aria-expanded={isExpanded}
-          aria-label={isExpanded ? 'Collapse product actions' : 'Expand product actions'}
-          onClick={onToggle}
-        >
-          <span />
-        </button>
-      </div>
-      {isExpanded ? <SearchResultMenu /> : null}
-    </article>
+      </Content>
+
+      <BottomNav activeView="promotions" onNavigate={onNavigate} />
+    </Screen>
   )
 }
 
-function SearchResultMenu() {
+function PromotionDetailScreen({ isLoading, onBack, onNavigate, promotion }) {
+  const imageUrl = promotion ? getPromotionImage(promotion) : ''
+
   return (
-    <div className="search-result-menu">
-      <p>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore
-        magna aliqua...
-      </p>
-      <div className="search-result-actions">
-        <button type="button">
-          <span className="search-action-icon details-action-icon" aria-hidden="true" />
-          Details
+    <Screen label="Promotion details">
+      <header className="promotion-detail-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
         </button>
-        <button type="button">
-          <span className="search-action-icon add-action-icon" aria-hidden="true" />
-          Add to list
-        </button>
-        <button type="button">
-          <span className="search-action-icon navigate-action-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 21s6-5.7 6-11a6 6 0 0 0-12 0c0 5.3 6 11 6 11Z" />
-              <circle cx="12" cy="10" r="2.4" />
-            </svg>
-          </span>
-          Navigate
-        </button>
-        <button type="button">
-          <span className="search-action-icon more-action-icon" aria-hidden="true" />
-          More options
-        </button>
-      </div>
-    </div>
+        <h1>Promotion</h1>
+      </header>
+
+      <Content>
+        {isLoading ? (
+          <InlineState>Loading promotion...</InlineState>
+        ) : promotion ? (
+          <article className="promotion-detail-content">
+            <div className="promotion-hero-banner">
+              {imageUrl ? <img src={imageUrl} alt="" /> : <span className="promo-symbol">%</span>}
+            </div>
+
+            <div className="promotion-detail-copy">
+              <p className="eyebrow">{formatDate(promotion.validUntil)}</p>
+              <h2>{getPromotionName(promotion)}</h2>
+              <p>{getPromotionDescription(promotion)}</p>
+            </div>
+          </article>
+        ) : (
+          <InlineState>Promotion not found.</InlineState>
+        )}
+      </Content>
+
+      <BottomNav activeView="promotions" onNavigate={onNavigate} />
+    </Screen>
   )
 }
 
-function CreateListScreen({ error, isSubmitting, listName, onCancel, onCreate, onListNameChange, onNavigate }) {
+function ProductDetailScreen({ onAddProductToList, onBack, onNavigate, productId, selectedStoreId, shoppingLists }) {
+  const [product, setProduct] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [addDialogProduct, setAddDialogProduct] = useState(null)
+  const [addDialogError, setAddDialogError] = useState('')
+  const [isAddingToList, setIsAddingToList] = useState(false)
+
+  useEffect(() => {
+    if (!productId) {
+      setProduct(null)
+      setError('Product id is missing.')
+      setIsLoading(false)
+      return
+    }
+
+    let isCurrent = true
+
+    async function loadProduct() {
+      setIsLoading(true)
+      setError('')
+
+      try {
+        const loadedProduct = await ProductService.getProductById(productId, {
+          storeId: selectedStoreId,
+        })
+
+        if (isCurrent) {
+          setProduct(loadedProduct)
+        }
+      } catch (error) {
+        if (isCurrent) {
+          setProduct(null)
+          setError(error.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadProduct()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [productId, selectedStoreId])
+
+  const categoryPath = [product?.category || 'Product'].filter(Boolean)
+  const price = formatProductPrice(product?.price)
+  const unitPrice = formatPricePerKg(product)
+  const imageUrl = product?.imageUrl || product?.picture || product?.thumbnailUrl || product?.thumbnail || ''
+  const aisle = product?.location?.sectionName || 'Location unavailable'
+
+  return (
+    <Screen label="Product details">
+      <header className="product-detail-top-bar">
+        <button className="back-button" type="button" aria-label="Go back" onClick={onBack}>
+          <span />
+        </button>
+        <div className="product-breadcrumbs" aria-label="Product category">
+          {categoryPath.map((segment) => (
+            <span key={segment}>{segment}</span>
+          ))}
+        </div>
+        <MoreButton label="Product options" />
+      </header>
+
+      <Content>
+        {isLoading ? (
+          <InlineState>Loading product...</InlineState>
+        ) : error ? (
+          <InlineState>{error}</InlineState>
+        ) : product ? (
+          <article className="product-detail-content">
+            <div className="product-image-panel" aria-hidden="true">
+              {imageUrl ? <img src={imageUrl} alt="" /> : <span />}
+            </div>
+
+            <section className="product-summary-card" aria-labelledby="product-title">
+              <h1 id="product-title">{product.name || 'Unnamed product'}</h1>
+              <p className="product-price">
+                <strong>{price ?? 'Price unavailable'}</strong>
+                {unitPrice ? <span>{unitPrice}</span> : null}
+              </p>
+            </section>
+
+            <section className="product-info-list" aria-label="Product information">
+              <button className="product-info-row" type="button">
+                <span className="product-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 21s7-6.2 7-12A7 7 0 0 0 5 9c0 5.8 7 12 7 12Z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                </span>
+                <span>
+                  <strong>Location</strong>
+                  <small>{aisle}</small>
+                </span>
+                <span className="external-link-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </button>
+            </section>
+
+            <section className="product-description-card" aria-labelledby="description-title">
+              <h2 id="description-title">Description</h2>
+              <p>{product.description || 'No description is available for this product yet.'}</p>
+            </section>
+          </article>
+        ) : (
+          <InlineState>Product not found.</InlineState>
+        )}
+      </Content>
+
+      {addDialogProduct ? (
+        <AddToListDialog
+          error={addDialogError}
+          isSubmitting={isAddingToList}
+          lists={shoppingLists}
+          onCancel={() => {
+            setAddDialogProduct(null)
+            setAddDialogError('')
+          }}
+          onConfirm={async ({ listId, quantity }) => {
+            setAddDialogError('')
+            setIsAddingToList(true)
+
+            try {
+              await onAddProductToList(listId, addDialogProduct.id, quantity)
+              setAddDialogProduct(null)
+            } catch (error) {
+              setAddDialogError(error.message)
+            } finally {
+              setIsAddingToList(false)
+            }
+          }}
+          product={addDialogProduct}
+        />
+      ) : null}
+
+      <button
+        className="product-add-floating"
+        type="button"
+        aria-label="Add product to list"
+        disabled={!product}
+        onClick={() => {
+          if (product) {
+            setAddDialogProduct(product)
+          }
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      </button>
+
+      <BottomNav activeView="home" onNavigate={onNavigate} />
+    </Screen>
+  )
+}
+
+function CreateListScreen({ error, isSubmitting, listName, onCancel, onCreate, onListNameChange, onNavigate, onOpenMenu }) {
   return (
     <Screen label="Create new list">
-      <TopBar title="New list" userEmail={null} />
+      <TopBar onMenuOpen={onOpenMenu} title="New list" userEmail={null} />
 
       <Content>
         <form className="create-list-form" onSubmit={onCreate}>
@@ -778,14 +1212,100 @@ function StoreSelectionScreen({ error, isLoading, onSelectStore, stores }) {
   )
 }
 
-function App() {
-  const [route, setRoute] = useState(getRouteFromHash)
+function ListDetailRoute({
+  activeListMenuId,
+  onBack,
+  onDeleteList,
+  onNavigate,
+  onQuantityChange,
+  onRenameList,
+  onRemoveItem,
+  onToggleListMenu,
+  productDetailsById,
+  productNamesById,
+  shoppingLists,
+}) {
+  const { listId = '' } = useParams()
+  const selectedList = shoppingLists.find((list) => String(list.id) === String(listId))
+
+  return (
+    <ListDetailScreen
+      isMenuOpen={activeListMenuId === selectedList?.id}
+      list={selectedList}
+      onBack={onBack}
+      onDeleteList={onDeleteList}
+      onMenuToggle={() => selectedList && onToggleListMenu(selectedList.id)}
+      onNavigate={onNavigate}
+      onQuantityChange={onQuantityChange}
+      onRenameList={onRenameList}
+      onRemoveItem={onRemoveItem}
+      productDetailsById={productDetailsById}
+      productNamesById={productNamesById}
+    />
+  )
+}
+
+function NavigationRoute({ onBack, onNavigate, productDetailsById, productNamesById, shoppingLists, storeMap }) {
+  const { listId = '' } = useParams()
+  const selectedList = shoppingLists.find((list) => String(list.id) === String(listId))
+
+  return (
+    <NavigationScreen
+      list={selectedList}
+      onBack={onBack}
+      onNavigate={onNavigate}
+      productDetailsById={productDetailsById}
+      productNamesById={productNamesById}
+      storeMap={storeMap}
+    />
+  )
+}
+
+function ProductDetailRoute({ onAddProductToList, onBack, onNavigate, selectedStoreId, shoppingLists }) {
+  const { productId = '' } = useParams()
+
+  return (
+    <ProductDetailScreen
+      onAddProductToList={onAddProductToList}
+      onBack={onBack}
+      onNavigate={onNavigate}
+      productId={productId}
+      selectedStoreId={selectedStoreId}
+      shoppingLists={shoppingLists}
+    />
+  )
+}
+
+function LocateRoute({ onBack, onNavigate, selectedStoreId, storeMap }) {
+  const { productId = '' } = useParams()
+
+  return (
+    <LocateScreen
+      onBack={onBack}
+      onNavigate={onNavigate}
+      productId={productId}
+      selectedStoreId={selectedStoreId}
+      storeMap={storeMap}
+    />
+  )
+}
+
+function PromotionDetailRoute({ isLoading, onBack, onNavigate, promotions }) {
+  const { promotionId = '' } = useParams()
+  const selectedPromotion = promotions.find((promotion) => String(promotion.id) === String(promotionId))
+
+  return <PromotionDetailScreen isLoading={isLoading} onBack={onBack} onNavigate={onNavigate} promotion={selectedPromotion} />
+}
+
+function AppContent() {
+  const routerNavigate = useNavigate()
   const [session, setSession] = useState(null)
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
   const [storeMap, setStoreMap] = useState(null)
   const [shoppingLists, setShoppingLists] = useState([])
   const [promotions, setPromotions] = useState([])
+  const [productDetailsById, setProductDetailsById] = useState({})
   const [productNamesById, setProductNamesById] = useState({})
   const [isHomeLoading, setIsHomeLoading] = useState(true)
   const [isListLoading, setIsListLoading] = useState(false)
@@ -805,15 +1325,12 @@ function App() {
   const [deleteDialogList, setDeleteDialogList] = useState(null)
   const [storeError, setStoreError] = useState('')
   const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    function handleHashChange() {
-      setRoute(getRouteFromHash())
-    }
-
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false)
+  const [productSearchState, setProductSearchState] = useState({
+    expandedResultId: '',
+    query: '',
+    results: [],
+  })
 
   useEffect(() => {
     let isCurrent = true
@@ -833,6 +1350,7 @@ function App() {
       }
 
       setSession(session)
+      setSelectedStoreId(session ? readStoredSelectedStoreId(session.user?.id) : '')
       setIsAuthLoading(false)
     }
 
@@ -842,10 +1360,10 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      setSelectedStoreId(session ? readStoredSelectedStoreId(session.user?.id) : '')
       setIsAuthLoading(false)
 
       if (!session) {
-        setSelectedStoreId('')
         setStores([])
         setStoreMap(null)
         setPromotions([])
@@ -896,9 +1414,21 @@ function App() {
   }, [session])
 
   useEffect(() => {
+    if (!session || !selectedStoreId || stores.length === 0) {
+      return
+    }
+
+    if (!stores.some((store) => String(store.id) === String(selectedStoreId))) {
+      clearStoredSelectedStoreId(session.user?.id)
+      setSelectedStoreId('')
+    }
+  }, [selectedStoreId, session, stores])
+
+  useEffect(() => {
     if (!session || !selectedStoreId) {
       setStoreMap(null)
       setPromotions([])
+      setProductDetailsById({})
       setIsHomeLoading(false)
       return
     }
@@ -908,6 +1438,9 @@ function App() {
     async function loadHomeData() {
       setIsHomeLoading(true)
       setMessage('')
+      // Product prices are store-specific, so switching stores invalidates the
+      // loaded product detail cache used by shopping-list totals.
+      setProductDetailsById({})
 
       try {
         const map = await StoreMapService.getStoreMap(selectedStoreId)
@@ -919,7 +1452,7 @@ function App() {
         setStoreMap(map)
 
         const loadedPromotions = await PromotionService.getPromotionsByStore(selectedStoreId, {
-          limit: PROMOTION_SLOTS,
+          limit: PROMOTION_LOAD_LIMIT,
         })
 
         if (isCurrent) {
@@ -946,6 +1479,7 @@ function App() {
   useEffect(() => {
     if (!session) {
       setShoppingLists([])
+      setProductDetailsById({})
       setProductNamesById({})
       return
     }
@@ -980,7 +1514,7 @@ function App() {
   }, [session])
 
   useEffect(() => {
-    if (shoppingLists.length === 0) {
+    if (shoppingLists.length === 0 || !storeMap?.storeId) {
       return
     }
 
@@ -990,7 +1524,14 @@ function App() {
         shoppingLists
           .flatMap((list) => list.items)
           .map((item) => item.productId)
-          .filter((productId) => productId && !productNamesById[productId]),
+          .filter((productId) => {
+            // Product details are considered loaded only when they were priced
+            // for the currently selected store. Rows loaded before store
+            // selection have null prices and must be fetched again.
+            const loadedProduct = productDetailsById[productId]
+
+            return productId && loadedProduct?.priceStoreId !== storeMap.storeId
+          }),
       ),
     ]
 
@@ -998,48 +1539,111 @@ function App() {
       return
     }
 
-    async function loadProductNames() {
+    async function loadProductDetails() {
+      // Shopping list detail rows need the current store price for each product.
+      // The same loaded product objects also keep the existing name preview map
+      // fresh for list cards and compact list summaries.
       const entries = await Promise.all(
         productIds.map(async (productId) => {
           try {
             const product = await ProductService.getProductById(productId, {
-              select: 'product_id, name',
+              select: 'product_id, name, description, thumbnail_url, image_url, quantity_unit, package_weight_grams',
               storeId: storeMap?.storeId,
             })
 
-            return [productId, product.name || `Product ${productId}`]
+            return [
+              productId,
+              {
+                ...product,
+                // Store prices come from StoreProduct, so this marker records
+                // which selected store produced the visible list-detail price.
+                priceStoreId: storeMap?.storeId,
+              },
+            ]
           } catch {
-            return [productId, `Product ${productId}`]
+            return [
+              productId,
+              {
+                id: productId,
+                name: `Product ${productId}`,
+                price: null,
+                priceStoreId: storeMap?.storeId,
+                quantityUnit: 'count',
+              },
+            ]
           }
         }),
       )
 
       if (isCurrent) {
+        const loadedProductsById = Object.fromEntries(entries)
+
+        setProductDetailsById((currentProducts) => ({
+          ...currentProducts,
+          ...loadedProductsById,
+        }))
         setProductNamesById((currentNames) => ({
           ...currentNames,
-          ...Object.fromEntries(entries),
+          ...Object.fromEntries(entries.map(([productId, product]) => [productId, product.name || `Product ${productId}`])),
         }))
       }
     }
 
-    loadProductNames()
+    loadProductDetails()
 
     return () => {
       isCurrent = false
     }
-  }, [productNamesById, shoppingLists, storeMap?.storeId])
+  }, [productDetailsById, shoppingLists, storeMap?.storeId])
 
-  const navigate = useMemo(
-    () => (view) => {
-      if (view === 'promotions') {
+  const navigate = useCallback(
+    (view, id, state) => {
+      if (view === 'promotionDetail' && id) {
+        routerNavigate(getPromotionDetailRoute(id), { state })
         return
       }
 
-      window.location.hash = ROUTES[view] ?? ROUTES.home
-      setRoute(view)
+      if (view === 'productDetail' && id) {
+        routerNavigate(getProductDetailRoute(id), { state })
+        return
+      }
+
+      if (view === 'locate' && id) {
+        routerNavigate(getProductLocateRoute(id), { state })
+        return
+      }
+
+      if (view === 'listDetail' && id) {
+        routerNavigate(getListDetailRoute(id), { state })
+        return
+      }
+
+      if (view === 'navigation' && id) {
+        routerNavigate(getListNavigationRoute(id), { state })
+        return
+      }
+
+      routerNavigate(ROUTES[view] ?? ROUTES.home, { state })
     },
-    [],
+    [routerNavigate],
   )
+
+  const goBack = useCallback(
+    (fallbackView = 'home') => {
+      if (window.history.length > 1) {
+        routerNavigate(-1)
+        return
+      }
+
+      routerNavigate(ROUTES[fallbackView] ?? ROUTES.home, { replace: true })
+    },
+    [routerNavigate],
+  )
+
+  const handleProductSearchStateChange = useCallback((nextSearchState) => {
+    setProductSearchState(nextSearchState)
+  }, [])
+
   const userEmail = session?.user?.email
   async function handleAuthSubmit(event) {
     event.preventDefault()
@@ -1074,7 +1678,19 @@ function App() {
 
   function handleSelectStore(storeId) {
     setSelectedStoreId(storeId)
+    writeStoredSelectedStoreId(session?.user?.id, storeId)
     setMessage('')
+    navigate('home')
+  }
+
+  function handleChangeStore() {
+    clearStoredSelectedStoreId(session?.user?.id)
+    setSelectedStoreId('')
+    setStoreMap(null)
+    setPromotions([])
+    setProductDetailsById({})
+    setMessage('')
+    setIsSideMenuOpen(false)
     navigate('home')
   }
 
@@ -1095,7 +1711,7 @@ function App() {
       const list = await ShoppingListService.createList(trimmedName)
       setShoppingLists((currentLists) => [list, ...currentLists])
       setNewListName('')
-      navigate('lists')
+      navigate('listDetail', list.id)
     } catch (error) {
       setNewListError(error.message)
     } finally {
@@ -1106,7 +1722,7 @@ function App() {
   function handleCancelCreateList() {
     setNewListError('')
     setNewListName('')
-    navigate('lists')
+    goBack('lists')
   }
 
   function handleToggleListMenu(listId) {
@@ -1183,6 +1799,80 @@ function App() {
     }
   }
 
+  async function handleAddProductToList(listId, productId, quantity) {
+    const item = await ShoppingListService.addItem(listId, productId, { quantity })
+    const updatedAt = new Date().toISOString()
+
+    setShoppingLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === listId
+          ? {
+              ...list,
+              updatedAt,
+              items: list.items.some((currentItem) => currentItem.id === item.id || String(currentItem.productId) === String(item.productId))
+                ? list.items.map((currentItem) =>
+                    currentItem.id === item.id || String(currentItem.productId) === String(item.productId) ? item : currentItem,
+                  )
+                : [...list.items, item],
+            }
+          : list,
+      ),
+    )
+  }
+
+  async function handleRemoveProductFromList(item) {
+    if (!item?.shoppingListId || !item?.productId) {
+      return
+    }
+
+    await ShoppingListService.removeItem({
+      itemId: item.id,
+      listId: item.shoppingListId,
+      productId: item.productId,
+    })
+
+    const updatedAt = new Date().toISOString()
+
+    setShoppingLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === item.shoppingListId
+          ? {
+              ...list,
+              updatedAt,
+              items: list.items.filter((currentItem) => currentItem.id !== item.id && String(currentItem.productId) !== String(item.productId)),
+            }
+          : list,
+      ),
+    )
+  }
+
+  async function handleUpdateListItemQuantity(item, amount, mode = 'delta') {
+    if (!item?.id) {
+      return
+    }
+
+    const nextQuantity = mode === 'set' ? Number(amount) : getNumericQuantity(item.quantity) + amount
+
+    if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
+      return
+    }
+
+    const updatedItem = await ShoppingListService.updateItemQuantity(item.id, nextQuantity)
+    const updatedAt = new Date().toISOString()
+
+    setShoppingLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === updatedItem.shoppingListId
+          ? {
+              ...list,
+              updatedAt,
+              items: list.items.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem)),
+            }
+          : list,
+      ),
+    )
+  }
+
   return (
     <AppFrame>
       {!session ? (
@@ -1205,53 +1895,198 @@ function App() {
           onSelectStore={handleSelectStore}
           stores={stores}
         />
-      ) : route === 'search' ? (
-        <SearchScreen onNavigate={navigate} />
-      ) : route === 'newList' ? (
-        <CreateListScreen
-          error={newListError}
-          isSubmitting={isCreatingList}
-          listName={newListName}
-          onCancel={handleCancelCreateList}
-          onCreate={handleCreateList}
-          onListNameChange={setNewListName}
-          onNavigate={navigate}
-        />
-      ) : route === 'lists' ? (
-        <AllListsScreen
-          activeListMenuId={activeListMenuId}
-          deleteDialogList={deleteDialogList}
-          isListLoading={isListLoading}
-          message={message}
-          onCancelDeleteList={handleCancelDeleteList}
-          onCancelRenameList={handleCancelRenameList}
-          onConfirmDeleteList={handleConfirmDeleteList}
-          onConfirmRenameList={handleConfirmRenameList}
-          onDeleteList={handleRequestDeleteList}
-          onNavigate={navigate}
-          onRenameDraftChange={setRenameDraft}
-          onRenameList={handleRequestRenameList}
-          onToggleListMenu={handleToggleListMenu}
-          renameDialogList={renameDialogList}
-          renameDraft={renameDraft}
-          session={session}
-          shoppingLists={shoppingLists}
-        />
       ) : (
-        <HomeScreen
-          isHomeLoading={isHomeLoading}
-          isListLoading={isListLoading}
-          message={message}
-          onNavigate={navigate}
-          productNamesById={productNamesById}
-          promotions={promotions}
-          session={session}
-          shoppingLists={shoppingLists}
-          storeMap={storeMap}
+        <Routes>
+          <Route
+            path="/lists/:listId/navigation"
+            element={
+              <NavigationRoute
+                onBack={() => goBack('lists')}
+                onNavigate={navigate}
+                productDetailsById={productDetailsById}
+                productNamesById={productNamesById}
+                shoppingLists={shoppingLists}
+                storeMap={storeMap}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.search}
+            element={
+              <SearchScreen
+                onAddProductToList={handleAddProductToList}
+                onBack={() => goBack('home')}
+                onNavigate={navigate}
+                onSearchStateChange={handleProductSearchStateChange}
+                searchState={productSearchState}
+                selectedStoreId={selectedStoreId}
+                shoppingLists={shoppingLists}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.listSearch}
+            element={
+              <ListSearchScreen
+                onBack={() => goBack('lists')}
+                onOpenList={(listId) => navigate('listDetail', listId)}
+                shoppingLists={shoppingLists}
+              />
+            }
+          />
+          <Route
+            path="/products/:productId/locate"
+            element={
+              <LocateRoute
+                onBack={() => goBack('search')}
+                onNavigate={navigate}
+                selectedStoreId={selectedStoreId}
+                storeMap={storeMap}
+              />
+            }
+          />
+          <Route
+            path="/products/:productId"
+            element={
+              <ProductDetailRoute
+                onAddProductToList={handleAddProductToList}
+                onBack={() => goBack('search')}
+                onNavigate={navigate}
+                selectedStoreId={selectedStoreId}
+                shoppingLists={shoppingLists}
+              />
+            }
+          />
+          <Route
+            path="/lists/:listId"
+            element={
+              <ListDetailRoute
+                activeListMenuId={activeListMenuId}
+                onBack={() => goBack('lists')}
+                onDeleteList={handleRequestDeleteList}
+                onNavigate={navigate}
+                onQuantityChange={handleUpdateListItemQuantity}
+                onRenameList={handleRequestRenameList}
+                onRemoveItem={handleRemoveProductFromList}
+                onToggleListMenu={handleToggleListMenu}
+                productDetailsById={productDetailsById}
+                productNamesById={productNamesById}
+                shoppingLists={shoppingLists}
+              />
+            }
+          />
+          <Route
+            path="/promotions/:promotionId"
+            element={
+              <PromotionDetailRoute
+                isLoading={isHomeLoading}
+                onBack={() => goBack('promotions')}
+                onNavigate={navigate}
+                promotions={promotions}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.promotions}
+            element={
+              <PromotionsScreen
+                isLoading={isHomeLoading}
+                message={message}
+                onNavigate={navigate}
+                onOpenMenu={() => setIsSideMenuOpen(true)}
+                promotions={promotions}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.map}
+            element={
+              <StoreMapScreen
+                isLoading={isHomeLoading}
+                onBack={() => goBack('home')}
+                onNavigate={navigate}
+                storeMap={storeMap}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.newList}
+            element={
+              <CreateListScreen
+                error={newListError}
+                isSubmitting={isCreatingList}
+                listName={newListName}
+                onCancel={handleCancelCreateList}
+                onCreate={handleCreateList}
+                onListNameChange={setNewListName}
+                onNavigate={navigate}
+                onOpenMenu={() => setIsSideMenuOpen(true)}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.lists}
+            element={
+              <AllListsScreen
+                activeListMenuId={activeListMenuId}
+                deleteDialogList={deleteDialogList}
+                isListLoading={isListLoading}
+                message={message}
+                onCancelDeleteList={handleCancelDeleteList}
+                onCancelRenameList={handleCancelRenameList}
+                onConfirmDeleteList={handleConfirmDeleteList}
+                onConfirmRenameList={handleConfirmRenameList}
+                onDeleteList={handleRequestDeleteList}
+                onOpenList={(listId) => navigate('listDetail', listId)}
+                onOpenMenu={() => setIsSideMenuOpen(true)}
+                onNavigate={navigate}
+                onRenameDraftChange={setRenameDraft}
+                onRenameList={handleRequestRenameList}
+                onToggleListMenu={handleToggleListMenu}
+                renameDialogList={renameDialogList}
+                renameDraft={renameDraft}
+                session={session}
+                shoppingLists={shoppingLists}
+              />
+            }
+          />
+          <Route
+            path={ROUTES.home}
+            element={
+              <HomeScreen
+                isHomeLoading={isHomeLoading}
+                isListLoading={isListLoading}
+                message={message}
+                onNavigate={navigate}
+                onOpenMenu={() => setIsSideMenuOpen(true)}
+                productNamesById={productNamesById}
+                promotions={promotions}
+                session={session}
+                shoppingLists={shoppingLists}
+                storeMap={storeMap}
+                userEmail={userEmail}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate replace to={ROUTES.home} />} />
+        </Routes>
+      )}
+      {isSideMenuOpen ? (
+        <SideMenu
+          onChangeStore={handleChangeStore}
+          onClose={() => setIsSideMenuOpen(false)}
           userEmail={userEmail}
         />
-      )}
+      ) : null}
     </AppFrame>
+  )
+}
+
+function App() {
+  return (
+    <HashRouter>
+      <AppContent />
+    </HashRouter>
   )
 }
 

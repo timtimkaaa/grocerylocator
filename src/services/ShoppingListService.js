@@ -236,6 +236,44 @@ export const ShoppingListService = {
       throw new Error('Product id is required')
     }
 
+    const { data: existingItem, error: existingItemError } = await supabase
+      .from(SHOPPING_LIST_ITEMS_TABLE)
+      .select('*')
+      .eq('shopping_list_id', listId)
+      .eq('product_id', productId)
+      .limit(1)
+      .maybeSingle()
+
+    raiseSupabaseError(existingItemError)
+
+    if (existingItem) {
+      const currentQuantity = Number(existingItem.quantity ?? 1)
+      const addedQuantity = Number(quantity ?? 1)
+      const nextQuantity =
+        (Number.isFinite(currentQuantity) ? currentQuantity : 1) +
+        (Number.isFinite(addedQuantity) && addedQuantity > 0 ? addedQuantity : 1)
+
+      const { data, error } = await supabase
+        .from(SHOPPING_LIST_ITEMS_TABLE)
+        .update({
+          quantity: nextQuantity,
+        })
+        .eq('shopping_list_item_id', existingItem.shopping_list_item_id ?? existingItem.id)
+        .select('*')
+        .single()
+
+      raiseSupabaseError(error)
+
+      const item = normalizeShoppingListItem(data)
+
+      await localDb.transaction('rw', localDb.shoppingListItems, localDb.shoppingLists, async () => {
+        await localDb.shoppingListItems.put(item)
+        await updateCachedListTimestamp(listId)
+      })
+
+      return item
+    }
+
     const { data, error } = await supabase
       .from(SHOPPING_LIST_ITEMS_TABLE)
       .insert({
@@ -253,6 +291,38 @@ export const ShoppingListService = {
     await localDb.transaction('rw', localDb.shoppingListItems, localDb.shoppingLists, async () => {
       await localDb.shoppingListItems.put(item)
       await updateCachedListTimestamp(listId)
+    })
+
+    return item
+  },
+
+  async updateItemQuantity(itemId, quantity) {
+    if (!itemId) {
+      throw new Error('Item id is required')
+    }
+
+    const numericQuantity = Number(quantity)
+
+    if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+      throw new Error('Quantity must be greater than 0')
+    }
+
+    const { data, error } = await supabase
+      .from(SHOPPING_LIST_ITEMS_TABLE)
+      .update({
+        quantity: numericQuantity,
+      })
+      .eq('shopping_list_item_id', itemId)
+      .select('*')
+      .single()
+
+    raiseSupabaseError(error)
+
+    const item = normalizeShoppingListItem(data)
+
+    await localDb.transaction('rw', localDb.shoppingListItems, localDb.shoppingLists, async () => {
+      await localDb.shoppingListItems.put(item)
+      await updateCachedListTimestamp(item.shoppingListId)
     })
 
     return item

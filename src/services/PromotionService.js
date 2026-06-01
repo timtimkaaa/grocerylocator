@@ -20,8 +20,10 @@ function normalizeProduct(product) {
     id: product.id ?? product.product_id,
     name: product.name ?? '',
     category: product.category ?? '',
-    thumbnail: product.thumbnail ?? '',
-    picture: product.picture ?? '',
+    thumbnail: product.thumbnail ?? product.thumbnail_url ?? '',
+    thumbnailUrl: product.thumbnailUrl ?? product.thumbnail_url ?? product.thumbnail ?? '',
+    picture: product.picture ?? product.image_url ?? '',
+    imageUrl: product.imageUrl ?? product.image_url ?? product.picture ?? '',
     quantityUnit: product.quantityUnit ?? product.quantity_unit ?? 'count',
     ...product,
   }
@@ -34,7 +36,9 @@ function normalizePromotion(promotion) {
     productId: promotion.productId ?? promotion.product_id,
     product: normalizeProduct(promotion.product),
     storeId: promotion.storeId ?? promotion.store_id,
-    picture: promotion.picture ?? '',
+    picture: promotion.picture ?? promotion.image_url ?? '',
+    imageUrl: promotion.imageUrl ?? promotion.image_url ?? promotion.picture ?? '',
+    title: promotion.title ?? '',
     description: promotion.description ?? '',
     discountValue: promotion.discountValue ?? promotion.discount_value ?? null,
     validUntil: promotion.validUntil ?? promotion.valid_until ?? null,
@@ -54,7 +58,7 @@ function getPromotionSelect(select) {
   // Supabase relationship name differs, callers can pass their own select.
   return (
     select ??
-    'promotion_id, product_id, store_id, picture, description, discount_value, valid_until, product:products(product_id, name, category, thumbnail, picture, quantity_unit)'
+    'promotion_id, product_id, store_id, image_url, title, description, discount_value, valid_until, product:products(product_id, name, category, thumbnail_url, image_url, quantity_unit)'
   )
 }
 
