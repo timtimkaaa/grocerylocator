@@ -44,3 +44,28 @@ export function PromotionsNavIcon() {
     </svg>
   )
 }
+
+export function DoorIcon() {
+  return (
+    <svg className="side-menu-svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5.75 20.25h12.5" />
+      <path d="M7.75 20.25V4.75h8.5v15.5" />
+      <path d="M16.25 6.25 11 4.75v15.5l5.25-1.5V6.25Z" />
+      <path d="M13.5 12h.01" />
+    </svg>
+  )
+}
+
+export function StoreIcon() {
+  return (
+    <svg className="side-menu-svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 10.25h14" />
+      <path d="M6.25 10.25 7.2 4.75h9.6l.95 5.5" />
+      <path d="M7 10.25v9h10v-9" />
+      <path d="M9.25 19.25v-5h5.5v5" />
+      <path d="M5.75 10.25v1.1a2 2 0 0 0 4 0v-1.1" />
+      <path d="M9.75 10.25v1.1a2 2 0 0 0 4 0v-1.1" />
+      <path d="M13.75 10.25v1.1a2 2 0 0 0 4 0v-1.1" />
+    </svg>
+  )
+}

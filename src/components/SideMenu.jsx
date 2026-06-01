@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { DoorIcon, StoreIcon } from './design-system/icons.jsx'
 
-export function SideMenu({ onChangeStore, onClose, userEmail }) {
+export function SideMenu({ onChangeStore, onClose, onLogOut, userEmail }) {
   const [isClosing, setIsClosing] = useState(false)
 
   function handleClose() {
@@ -37,21 +38,18 @@ export function SideMenu({ onChangeStore, onClose, userEmail }) {
 
         <nav className="side-menu-options" aria-label="Menu options">
           <button type="button" onClick={onChangeStore}>
-            <span className="side-menu-icon store-icon" aria-hidden="true" />
+            <span className="side-menu-icon" aria-hidden="true">
+              <StoreIcon />
+            </span>
             <span>
               <strong>Change store</strong>
               <small>Switch active store</small>
             </span>
           </button>
-          <button type="button">
-            <span className="side-menu-icon theme-icon" aria-hidden="true" />
-            <span>
-              <strong>Change theme</strong>
-              <small>Adjust app appearance</small>
+          <button type="button" onClick={onLogOut}>
+            <span className="side-menu-icon" aria-hidden="true">
+              <DoorIcon />
             </span>
-          </button>
-          <button type="button">
-            <span className="side-menu-icon logout-icon" aria-hidden="true" />
             <span>
               <strong>Log out</strong>
               <small>End this session</small>

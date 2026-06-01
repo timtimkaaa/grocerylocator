@@ -1800,42 +1800,15 @@
   color: var(--color-primary);
 }
 
-.store-icon::before {
-  content: '';
-  width: 18px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-radius: 4px;
-  box-shadow: 0 -6px 0 -3px currentColor;
-}
-
-.theme-icon::before {
-  content: '';
-  width: 18px;
-  height: 18px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background: linear-gradient(90deg, currentColor 0 50%, transparent 50%);
-}
-
-.logout-icon::before {
-  content: '';
-  width: 17px;
-  height: 15px;
-  border: 2px solid currentColor;
-  border-right: 0;
-  border-radius: 4px 0 0 4px;
-}
-
-.logout-icon::after {
-  content: '';
-  position: absolute;
-  right: 9px;
-  width: 11px;
-  height: 11px;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  transform: rotate(45deg);
+.side-menu-svg-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
 }
 
 @keyframes side-menu-backdrop-in {
@@ -2157,11 +2130,14 @@
 .search-top-bar h1 {
   margin: 0;
   padding-bottom: 2px;
+  overflow: hidden;
   color: var(--color-text-strong);
   font-size: 1.62rem;
   font-weight: 850;
   line-height: 1.28;
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .back-button {
@@ -2171,8 +2147,9 @@
   place-items: center;
   border: 0;
   border-radius: var(--radius-control);
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-text);
+  box-shadow: 0 8px 20px rgba(32, 45, 41, 0.08);
   cursor: pointer;
 }
 
@@ -2182,7 +2159,7 @@
   display: block;
   border-left: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
+  transform: translateX(3px) rotate(45deg);
 }
 
 .search-screen-content {
@@ -2221,29 +2198,6 @@
 
 .search-field input:focus {
   outline: 0;
-}
-
-.search-controls {
-  height: 44px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  overflow: hidden;
-  margin-top: 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: #ebe7dc;
-  padding: 4px;
-}
-
-.search-controls button {
-  border: 0;
-  border-radius: 12px;
-  background: var(--color-surface-raised);
-  color: #285641;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 850;
-  box-shadow: var(--shadow-soft);
 }
 
 .search-results-title {

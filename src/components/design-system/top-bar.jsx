@@ -1,8 +1,4 @@
-function getInitial(email) {
-  return email?.trim()?.charAt(0)?.toUpperCase() ?? 'G'
-}
-
-export function TopBar({ actions, hideProfile = false, onMenuOpen, title, userEmail }) {
+export function TopBar({ actions, onMenuOpen, title }) {
   return (
     <header className="top-bar">
       <button className="menu-button" type="button" aria-label="Open menu" onClick={onMenuOpen}>
@@ -14,11 +10,7 @@ export function TopBar({ actions, hideProfile = false, onMenuOpen, title, userEm
         <p>Grocery Navigator</p>
         <h1>{title}</h1>
       </div>
-      {actions ?? (hideProfile ? <span aria-hidden="true" /> : (
-        <button className="profile-button" type="button" aria-label="Account">
-          {getInitial(userEmail)}
-        </button>
-      ))}
+      {actions ?? <span aria-hidden="true" />}
     </header>
   )
 }
