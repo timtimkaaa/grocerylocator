@@ -93,7 +93,16 @@ export function ProductDetailScreen({ onAddProductToList, onBack, onNavigate, pr
             </section>
 
             <section className="product-info-list" aria-label="Product information">
-              <button className="product-info-row" type="button">
+              <button
+                className="product-info-row"
+                type="button"
+                disabled={!product?.id}
+                onClick={() => {
+                  if (product?.id) {
+                    onNavigate('locate', product.id)
+                  }
+                }}
+              >
                 <span className="product-row-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M12 21s7-6.2 7-12A7 7 0 0 0 5 9c0 5.8 7 12 7 12Z" />
