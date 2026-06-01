@@ -12,6 +12,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // One cleanup deploy to remove stale Pages caches/service workers from
+      // earlier broken releases. After the site loads cleanly again, turn this
+      // back off to restore normal PWA behavior.
+      selfDestroying: true,
       manifest: {
         name: 'GroceryLocator',
         short_name: 'GroceryLocator',
