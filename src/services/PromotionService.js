@@ -45,6 +45,20 @@ function normalizePromotion(promotion) {
   }
 }
 
+function isPromotionActive(promotion) {
+  if (!promotion?.validUntil) {
+    return true
+  }
+
+  const validUntilTime = new Date(promotion.validUntil).getTime()
+
+  if (!Number.isFinite(validUntilTime)) {
+    return true
+  }
+
+  return validUntilTime >= Date.now()
+}
+
 async function cachePromotions(promotions) {
   if (promotions.length === 0) {
     return
@@ -73,12 +87,12 @@ export const PromotionService = {
     const { data, error } = await query
 
     if (error) {
-      const cachedPromotions = await localDb.promotions.toArray()
+      const cachedPromotions = (await localDb.promotions.toArray()).filter(isPromotionActive)
       if (cachedPromotions.length > 0) return cachedPromotions
       raiseSupabaseError(error)
     }
 
-    const promotions = (data ?? []).map(normalizePromotion).filter((promotion) => promotion.id)
+    const promotions = (data ?? []).map(normalizePromotion).filter((promotion) => promotion.id).filter(isPromotionActive)
     await cachePromotions(promotions)
 
     return promotions
@@ -98,12 +112,12 @@ export const PromotionService = {
     const { data, error } = await query
 
     if (error) {
-      const cachedPromotions = await localDb.promotions.where('storeId').equals(storeId).toArray()
+      const cachedPromotions = (await localDb.promotions.where('storeId').equals(storeId).toArray()).filter(isPromotionActive)
       if (cachedPromotions.length > 0) return cachedPromotions
       raiseSupabaseError(error)
     }
 
-    const promotions = (data ?? []).map(normalizePromotion).filter((promotion) => promotion.id)
+    const promotions = (data ?? []).map(normalizePromotion).filter((promotion) => promotion.id).filter(isPromotionActive)
     await cachePromotions(promotions)
 
     return promotions
