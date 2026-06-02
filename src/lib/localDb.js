@@ -82,3 +82,17 @@ localDb.version(8).stores({
   shoppingListItems: '&id, shoppingListId, productId, isCollected',
   promotions: '&id, storeId, productId, validUntil',
 })
+
+// Version 9 adds store-scoped product snapshots. Product ids are global, but
+// prices and locations belong to a specific store, so offline product access
+// needs a composite cache key.
+localDb.version(9).stores({
+  stores: '&id, name, width, length',
+  sections: '&id, storeId, name, x, y, sectionType, hasProducts',
+  storeMaps: '&storeId',
+  products: '&id, name, category, quantityUnit',
+  storeProducts: '[storeId+productId], storeId, productId, name, category',
+  shoppingLists: '&id, userId, updatedAt, finished',
+  shoppingListItems: '&id, shoppingListId, productId, isCollected',
+  promotions: '&id, storeId, productId, validUntil',
+})

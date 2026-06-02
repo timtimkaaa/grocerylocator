@@ -363,20 +363,30 @@ export const StoreMapService = {
   },
 
   async getStoreMap(storeId) {
-    // Convenience method for screens: StoreService supplies store dimensions,
-    // while StoreMapService keeps ownership of sections and map construction.
-    const store = await StoreService.getStoreById(storeId)
-    const resolvedStoreId = store?.id ?? storeId
-    const sections = await this.getSections(resolvedStoreId)
-    const grid = createGrid(store)
-    const storeMap = await this.buildMap(sections, grid)
+    try {
+      // Convenience method for screens: StoreService supplies store dimensions,
+      // while StoreMapService keeps ownership of sections and map construction.
+      const store = await StoreService.getStoreById(storeId)
+      const resolvedStoreId = store?.id ?? storeId
+      const sections = await this.getSections(resolvedStoreId)
+      const grid = createGrid(store)
+      const storeMap = await this.buildMap(sections, grid)
 
-    const enrichedStoreMap = {
-      ...storeMap,
-      store: store ?? null,
-      storeId: store?.id ?? storeMap.storeId,
+      const enrichedStoreMap = {
+        ...storeMap,
+        store: store ?? null,
+        storeId: store?.id ?? storeMap.storeId,
+      }
+
+      return this.saveStoreMap(enrichedStoreMap)
+    } catch (error) {
+      const cachedStoreMap = storeId ? await localDb.storeMaps.get(storeId) : null
+
+      if (cachedStoreMap) {
+        return cachedStoreMap
+      }
+
+      raiseSupabaseError(error)
     }
-
-    return this.saveStoreMap(enrichedStoreMap)
   },
 }

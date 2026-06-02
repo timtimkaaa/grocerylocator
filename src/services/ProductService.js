@@ -51,6 +51,17 @@ function normalizeProductPreview(product, priceByProductId = new Map()) {
   }
 }
 
+function normalizeStoreScopedProduct(product, storeId) {
+  const normalizedProduct = normalizeProduct(product)
+  const productId = normalizedProduct.id ?? product.productId ?? product.product_id
+
+  return {
+    ...normalizedProduct,
+    productId,
+    storeId: storeId ?? product.storeId ?? product.priceStoreId ?? product.location?.storeId ?? null,
+  }
+}
+
 async function getStoreProductRows(productIds, storeId) {
   if (productIds.length === 0) {
     return []
@@ -96,7 +107,7 @@ function getStoreProductByProductId(storeProductRows) {
   return new Map(storeProductRows.map((storeProduct) => [storeProduct.product_id, storeProduct]))
 }
 
-async function cacheProductPreviews(previews) {
+async function cacheProductPreviews(previews, storeId) {
   // Dexie `put` replaces an object, so merge previews with any existing cached
   // full product details to avoid losing fields like description or location.
   const mergedProducts = await Promise.all(
@@ -110,6 +121,47 @@ async function cacheProductPreviews(previews) {
   )
 
   await localDb.products.bulkPut(mergedProducts)
+
+  if (storeId) {
+    const storeScopedProducts = previews.map((preview) => normalizeStoreScopedProduct(preview, storeId))
+    await localDb.storeProducts.bulkPut(storeScopedProducts)
+  }
+}
+
+async function cacheStoreScopedProduct(product, storeId) {
+  if (!storeId || !product?.id) {
+    return
+  }
+
+  await localDb.storeProducts.put(normalizeStoreScopedProduct(product, storeId))
+}
+
+async function getCachedProductById(id, storeId) {
+  if (storeId) {
+    const cachedStoreProduct = await localDb.storeProducts.get([storeId, id])
+    if (cachedStoreProduct) {
+      return cachedStoreProduct
+    }
+  }
+
+  return localDb.products.get(id)
+}
+
+async function getCachedProductPreviews(searchTerm, { limit = 20, storeId } = {}) {
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+
+  if (!normalizedSearchTerm) {
+    return []
+  }
+
+  const cachedProducts = storeId
+    ? await localDb.storeProducts.where('storeId').equals(storeId).toArray()
+    : await localDb.products.toArray()
+
+  return cachedProducts
+    .filter((product) => (product.name ?? '').toLowerCase().includes(normalizedSearchTerm))
+    .slice(0, limit)
+    .map((product) => normalizeProductPreview(product, new Map([[product.id ?? product.productId, product.price ?? null]])))
 }
 
 function normalizeProductLocation(storeProduct, section) {
@@ -230,20 +282,24 @@ export const ProductService = {
       .eq('product_id', id)
       .single()
 
+    const cachedProduct = await getCachedProductById(id, storeId)
+
     if (error) {
-      const cachedProduct = await localDb.products.get(id)
       if (cachedProduct) return cachedProduct
       raiseSupabaseError(error)
     }
 
     const storePricing = await getProductStorePricing(id, storeId)
+    const location = (await getProductLocation(id, storeId)) ?? cachedProduct?.location ?? null
     const product = {
+      ...(cachedProduct ?? {}),
       ...normalizeProduct(data),
-      price: storePricing.price,
-      pricePerKg: storePricing.pricePerKg,
-      location: await getProductLocation(id, storeId),
+      price: storePricing.price ?? cachedProduct?.price ?? null,
+      pricePerKg: storePricing.pricePerKg ?? cachedProduct?.pricePerKg ?? null,
+      location,
     }
     await localDb.products.put(product)
+    await cacheStoreScopedProduct(product, storeId)
 
     return product
   },
@@ -261,7 +317,7 @@ export const ProductService = {
       const storeProductIds = storeProductRows.map((storeProduct) => storeProduct.product_id).filter(Boolean)
 
       if (storeProductIds.length === 0) {
-        return []
+        return getCachedProductPreviews(searchTerm, { limit, storeId })
       }
 
       const { data, error } = await supabase
@@ -271,7 +327,11 @@ export const ProductService = {
         .ilike('name', `%${searchTerm.trim()}%`)
         .limit(limit)
 
-      raiseSupabaseError(error)
+      if (error) {
+        const cachedPreviews = await getCachedProductPreviews(searchTerm, { limit, storeId })
+        if (cachedPreviews.length > 0) return cachedPreviews
+        raiseSupabaseError(error)
+      }
 
       const priceByProductId = getPriceByProductId(storeProductRows)
       const storeProductByProductId = getStoreProductByProductId(storeProductRows)
@@ -285,7 +345,7 @@ export const ProductService = {
         ),
       )
 
-      await cacheProductPreviews(previews)
+      await cacheProductPreviews(previews, storeId)
 
       return previews
     }
@@ -296,7 +356,11 @@ export const ProductService = {
       .ilike('name', `%${searchTerm.trim()}%`)
       .limit(limit)
 
-    raiseSupabaseError(error)
+    if (error) {
+      const cachedPreviews = await getCachedProductPreviews(searchTerm, { limit, storeId })
+      if (cachedPreviews.length > 0) return cachedPreviews
+      raiseSupabaseError(error)
+    }
 
     const products = data ?? []
     const productIds = products.map((product) => product.product_id).filter(Boolean)
@@ -313,7 +377,7 @@ export const ProductService = {
       ),
     )
 
-    await cacheProductPreviews(previews)
+    await cacheProductPreviews(previews, storeId)
 
     return previews
   },
