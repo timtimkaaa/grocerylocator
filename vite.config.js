@@ -4,8 +4,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const repoBase = '/grocerylocator/'
 
-// Vite config stays intentionally small for now. The React plugin enables JSX,
-// Fast Refresh during development, and production transforms for React.
+// Vite uses the React plugin for JSX transforms, Fast Refresh, and production
+// React compilation.
 export default defineConfig({
   base: repoBase,
   plugins: [

@@ -1,11 +1,10 @@
 import { localDb } from '../lib/localDb'
 import { supabase } from '../lib/supabaseClient'
 
-// StoreService loads Store rows.
+// StoreService loads and normalizes store rows.
 const STORES_TABLE = 'stores'
 
-// Fallback dimensions keep the app usable if a store row is missing dimensions
-// or an invalid value is stored while the database is being edited.
+// Fallback dimensions cover missing or invalid store size values.
 const DEFAULT_MAP_WIDTH = 21
 const DEFAULT_MAP_LENGTH = 17
 
@@ -36,8 +35,8 @@ function normalizeStore(store) {
 
 export const StoreService = {
   async getStores() {
-    // Fetch every store because the current UI does not yet include a store
-    // selector. `getStoreById` picks the first store when no id is provided.
+    // Fetch all stores so selection and map loading can resolve from one cached
+    // source.
     const { data, error } = await supabase.from(STORES_TABLE).select('*')
 
     if (error) {

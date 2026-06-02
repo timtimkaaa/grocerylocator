@@ -1,22 +1,21 @@
 import { localDb } from '../lib/localDb'
 import { supabase } from '../lib/supabaseClient'
 
-// The ProductService is a thin data-access layer. Components import this
-// service to get the products.
+// ProductService loads product records, store-scoped pricing, and search
+// previews for React screens.
 const PRODUCTS_TABLE = 'products'
 const STORE_PRODUCTS_TABLE = 'store_products'
 const SECTIONS_TABLE = 'sections'
 
 function raiseSupabaseError(error) {
-  // Convert Supabase's explicit error return shape into an exception so UI code
-  // can handle failures with try/catch.
+  // Convert Supabase error return values into thrown exceptions.
   if (error) {
     throw new Error(error.message)
   }
 }
 
 function normalizeProduct(product) {
-  // The app stores products locally with a stable `id` key for Dexie and UI code.
+  // Normalize product rows to a stable `id` key used by Dexie and React.
   return {
     id: product.id ?? product.product_id,
     name: product.name,
@@ -34,8 +33,8 @@ function normalizeProduct(product) {
 }
 
 function normalizeProductPreview(product, priceByProductId = new Map()) {
-  // Search screens need a smaller product shape than details screens. Keep the
-  // preview intentionally narrow while still including `id` for rendering keys.
+  // Search previews use a narrower product shape while keeping `id` for stable
+  // render keys and local caching.
   const id = product.id ?? product.product_id
 
   return {
@@ -108,8 +107,8 @@ function getStoreProductByProductId(storeProductRows) {
 }
 
 async function cacheProductPreviews(previews, storeId) {
-  // Dexie `put` replaces an object, so merge previews with any existing cached
-  // full product details to avoid losing fields like description or location.
+  // Dexie `put` replaces objects, so cached previews merge with any existing
+  // detailed record to preserve fields such as description and location.
   const mergedProducts = await Promise.all(
     previews.map(async (preview) => {
       const cachedProduct = await localDb.products.get(preview.id)
@@ -245,13 +244,12 @@ async function getProductStorePricing(productId, storeId) {
 
 export const ProductService = {
   async getProducts({ select = '*', from, to, filters = {} } = {}) {
-    // Start with a flexible select so screens can request either full rows or a
-    // smaller projection when they only need product previews.
+    // The `select` clause stays caller-controlled so screens can request full
+    // rows or smaller projections.
     let query = supabase.from(PRODUCTS_TABLE).select(select)
 
-    // Filters are intentionally generic: `{ category: 'dairy' }` becomes
-    // `.eq('category', 'dairy')`. Empty values are ignored to keep form-driven
-    // filters from producing accidental queries.
+    // Generic filter objects become `.eq(column, value)` clauses. Empty values
+    // are ignored.
     Object.entries(filters).forEach(([column, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         query = query.eq(column, value)
@@ -270,8 +268,7 @@ export const ProductService = {
   },
 
   async getProductById(id, { select = '*', storeId } = {}) {
-    // Fail early for caller mistakes instead of issuing an ambiguous database
-    // query that could return the wrong thing or a less helpful Supabase error.
+    // Missing ids fail before issuing an ambiguous database query.
     if (!id) {
       throw new Error('Product id is required')
     }

@@ -1,7 +1,7 @@
 import { localDb } from '../lib/localDb'
 import { supabase } from '../lib/supabaseClient'
 
-// Table names follow the README ER diagram.
+// Supabase table names match the relational backend schema.
 const SHOPPING_LISTS_TABLE = 'shopping_lists'
 const SHOPPING_LIST_ITEMS_TABLE = 'shopping_list_items'
 
@@ -29,8 +29,8 @@ function normalizeShoppingList(list, items = []) {
 }
 
 function normalizeShoppingListItem(item) {
-  // README class diagram uses `isCollected`; the ER diagram currently only
-  // lists quantity. This supports both so the frontend can move ahead.
+  // Normalize quantity and collected-state fields into the frontend item
+  // shape.
   return {
     id: item.id ?? item.shopping_list_item_id,
     shoppingListId: item.shoppingListId ?? item.shopping_list_id,
@@ -77,8 +77,7 @@ function groupItemsByListId(items) {
 }
 
 async function updateCachedListTimestamp(listId) {
-  // Keep the local list order fresh after item changes. The remote list row can
-  // be updated later when sync/conflict behavior is more developed.
+  // Refresh the cached list timestamp after local item changes.
   const cachedList = await localDb.shoppingLists.get(listId)
 
   if (!cachedList) {
@@ -93,8 +92,8 @@ async function updateCachedListTimestamp(listId) {
 
 export const ShoppingListService = {
   async getShoppingLists({ userId } = {}) {
-    // Default to the authenticated Supabase user. A userId option keeps this
-    // testable and flexible for future admin/shared-list screens.
+    // Reads default to the authenticated Supabase user. An explicit userId
+    // keeps the method reusable for non-default callers.
     const resolvedUserId = userId ?? (await getCurrentUserId())
 
     if (!resolvedUserId) {

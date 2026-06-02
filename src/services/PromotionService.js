@@ -1,11 +1,11 @@
 import { localDb } from '../lib/localDb'
 import { supabase } from '../lib/supabaseClient'
 
-// Table names follow the README ER diagram.
+// Supabase table names match the relational backend schema.
 const PROMOTIONS_TABLE = 'promotions'
 
 function raiseSupabaseError(error) {
-  // Supabase returns errors as values. Throw here so UI code can use try/catch.
+  // Convert Supabase error return values into thrown exceptions.
   if (error) {
     throw new Error(error.message)
   }
@@ -68,8 +68,8 @@ async function cachePromotions(promotions) {
 }
 
 function getPromotionSelect(select) {
-  // Default to the promotion fields plus a lightweight related product. If the
-  // Supabase relationship name differs, callers can pass their own select.
+  // The default select includes promotion fields plus a lightweight related
+  // product projection.
   return (
     select ??
     'promotion_id, product_id, store_id, image_url, title, description, discount_value, valid_until, product:products(product_id, name, category, thumbnail_url, image_url, quantity_unit)'

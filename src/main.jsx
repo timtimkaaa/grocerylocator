@@ -3,11 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
-// This is the React entry point. Vite loads it from index.html and mounts the
-// application into the `<div id="root">` element.
+// React mounts the application into the root element referenced by index.html.
 createRoot(document.getElementById('root')).render(
-  // StrictMode intentionally double-invokes some development lifecycle paths so
-  // side effects are easier to catch before production.
+  // StrictMode double-invokes selected development lifecycle paths to expose
+  // impure side effects.
   <StrictMode>
     <App />
   </StrictMode>,

@@ -2,7 +2,7 @@ import { localDb } from '../lib/localDb'
 import { supabase } from '../lib/supabaseClient'
 import { StoreService } from './StoreService'
 
-// Store maps are generated from three pieces of data:
+// Store maps combine three backend data sources:
 // - `stores`: supplies the physical grid size.
 // - `sections`: supplies named cells on that grid.
 // - `store_products`: marks which sections contain products.
@@ -11,9 +11,8 @@ const STORE_PRODUCTS_TABLE = 'store_products'
 const DEFAULT_MAP_WIDTH = 21
 const DEFAULT_MAP_LENGTH = 17
 
-// Product section groups use a deterministic palette so repeated loads keep the
-// same section group visually recognizable. Non-product groups intentionally use
-// one neutral color because they are supporting areas rather than shopping zones.
+// Product section groups use a deterministic palette so repeated loads preserve
+// stable visual identities. Non-product groups use a neutral color.
 const SECTION_GROUP_COLORS = [
   '#f2c14e',
   '#7fb069',
@@ -240,7 +239,7 @@ function buildSectionGroups(sectionByPosition) {
 }
 
 function getSectionEmoji(section) {
-  // These emoji's are temporary display hints until the app has a real icon set.
+  // Section emoji provide compact visual hints derived from section type/name.
   const sectionType = section.sectionType?.toLowerCase() ?? ''
   const name = section.name?.toLowerCase() ?? ''
 
@@ -355,8 +354,7 @@ export const StoreMapService = {
   },
 
   async saveStoreMap(storeMap) {
-    // Persist the final StoreMap shape in Dexie. Keeping this as a dedicated
-    // method makes the persistence step explicit for callers and future tests.
+    // Persist the render-ready StoreMap shape in Dexie.
     await localDb.storeMaps.put(storeMap)
 
     return storeMap

@@ -55,8 +55,8 @@ export function ListDetailScreen({
                 onQuantityChange={onQuantityChange}
                 onRemove={onRemoveItem}
                 onToggle={() => {
-                  // One row is open at a time to keep the list readable and
-                  // close to the compact single-column mockup layout.
+                  // One expanded row at a time keeps item actions adjacent to
+                  // the active row and preserves the single-column layout.
                   const itemKey = item.id ?? `${item.productId}-${item.quantity}`
                   setExpandedItemId((currentItemId) => (currentItemId === itemKey ? '' : itemKey))
                 }}

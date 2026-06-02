@@ -60,8 +60,8 @@ export function getPromotionDescription(promotion) {
 }
 
 export function getNumericPrice(price) {
-  // Prices normally arrive as numbers from store_products, but cached or future
-  // data can be string-shaped. Null keeps unknown prices out of calculations.
+  // Prices usually arrive as numbers from store_products, but cached values may
+  // be string-shaped. Null excludes unknown prices from calculations.
   if (price === null || price === undefined || price === '') return null
 
   const numericPrice = Number(String(price).replace(',', '.').replace(/[^\d.-]/g, ''))
@@ -77,8 +77,8 @@ export function getNumericQuantity(quantity) {
 }
 
 export function formatQuantity(quantity) {
-  // Whole quantities render as integers; fractional quantities keep useful
-  // precision without trailing zeroes.
+  // Whole quantities render as integers; fractional quantities keep precision
+  // without trailing zeroes.
   return Number.isInteger(quantity) ? String(quantity) : quantity.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
 }
 
@@ -103,7 +103,7 @@ export function getLineTotal(item, product) {
 
 export function getListTotal(items, productDetailsById) {
   // The total sums only items that have a loaded price. If none are available,
-  // the UI keeps the placeholder rather than showing a misleading zero.
+  // the UI keeps a placeholder rather than showing a misleading zero total.
   const totals = items
     .map((item) => getLineTotal(item, productDetailsById[item.productId]))
     .filter((total) => total !== null)

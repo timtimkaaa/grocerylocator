@@ -2,8 +2,8 @@ import { BottomNav, Content, Screen } from '../components/design-system.jsx'
 import { MapEmptyState, MiniMap } from '../components/store-map.jsx'
 
 export function StoreMapScreen({ isLoading, onBack, onNavigate, storeMap }) {
-  // The map screen uses a simple detail header: back navigation on the left,
-  // centered title, and an empty right spacer to keep the title balanced.
+  // The map screen header uses a left back button and a right spacer so the
+  // title remains centered.
   return (
     <Screen label="Store map">
       <header className="map-top-bar">

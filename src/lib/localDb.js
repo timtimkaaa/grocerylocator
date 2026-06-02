@@ -4,8 +4,7 @@ import Dexie from 'dexie'
 // of remote Supabase data so the app can reuse the last loaded store map.
 export const localDb = new Dexie('groceryNavigator')
 
-// Version 1 is the original local schema used when the project first added map
-// caching. Keeping it declared lets Dexie upgrade older browsers cleanly.
+// Version 1 stores cached stores, sections, and rendered store maps.
 localDb.version(1).stores({
   stores: '&id, name',
   sections: '&id, storeId, name, x, y, hasProducts',
@@ -29,8 +28,7 @@ localDb.version(3).stores({
   storeMaps: '&storeId',
 })
 
-// Version 4 adds product caching. ProductService writes full product rows here
-// after fetching them from Supabase so details can be reused locally.
+// Version 4 adds product caching for locally reusable product detail records.
 localDb.version(4).stores({
   stores: '&id, name, width, length',
   sections: '&id, storeId, name, x, y, sectionType, hasProducts',
@@ -71,8 +69,7 @@ localDb.version(7).stores({
   shoppingListItems: '&id, shoppingListId, productId, isCollected',
 })
 
-// Version 8 adds promotion caching for the Promotions screen. Promotions are
-// indexed by store and product because both views are expected in the app.
+// Version 8 adds promotion caching indexed by store and product.
 localDb.version(8).stores({
   stores: '&id, name, width, length',
   sections: '&id, storeId, name, x, y, sectionType, hasProducts',

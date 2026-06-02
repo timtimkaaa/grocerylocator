@@ -109,8 +109,8 @@ function ListProductPlaceholder({ product }) {
 }
 
 function ListItemActionIcon({ type }) {
-  // Expanded list rows use compact icon buttons for product-level actions. The
-  // icons are inline so this screen does not depend on a separate icon package.
+  // Expanded list rows render inline SVG action icons for product-level
+  // commands.
   if (type === 'remove') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -153,8 +153,8 @@ function ListItemActionIcon({ type }) {
 }
 
 function ExpandedListItemActions({ onNavigate, onRemove, product }) {
-  // Expanded actions expose the same commands shown in the mockup. Details and
-  // locate are wired to existing app routes.
+  // Expanded actions open product details, map location, removal, and overflow
+  // actions for the current list item.
   const productId = product?.id
 
   return (
