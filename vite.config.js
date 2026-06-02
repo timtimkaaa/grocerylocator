@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-const repoBase = '/grocerynavigator/'
+const repoBase = '/grocerylocator/'
 
 // Vite config stays intentionally small for now. The React plugin enables JSX,
 // Fast Refresh during development, and production transforms for React.
