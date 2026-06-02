@@ -116,6 +116,7 @@ function PromotionDetailRoute({ isLoading, onBack, onNavigate, promotions }) {
 
 function AppContent() {
   const routerNavigate = useNavigate()
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const [session, setSession] = useState(null)
   const [stores, setStores] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState('')
@@ -148,6 +149,24 @@ function AppContent() {
     query: '',
     results: [],
   })
+
+  useEffect(() => {
+    function handleOnline() {
+      setIsOnline(true)
+    }
+
+    function handleOffline() {
+      setIsOnline(false)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   useEffect(() => {
     let isCurrent = true
@@ -900,6 +919,7 @@ function AppContent() {
           userEmail={userEmail}
         />
       ) : null}
+      {!isOnline ? <div className="offline-banner">You're offline</div> : null}
     </AppFrame>
   )
 }
