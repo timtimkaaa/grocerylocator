@@ -3,6 +3,7 @@ import { InlineState, Screen } from '../components/design-system.jsx'
 import { NavigationRouteOverlay } from '../components/navigation-components.jsx'
 import { MapEmptyState, MiniMap } from '../components/store-map.jsx'
 import { RoutePlannerService } from '../services/RoutePlannerService'
+import { formatQuantity, formatQuantityUnit, getNumericQuantity } from '../utils/formatting.js'
 
 export function NavigationScreen({ list, onBack, onNavigate, productDetailsById, productNamesById, storeMap }) {
   const items = list?.items ?? []
@@ -89,13 +90,18 @@ export function NavigationScreen({ list, onBack, onNavigate, productDetailsById,
   function renderRouteItem(item, index, options = {}) {
     const product = productDetailsById[item.productId]
     const productName = product?.name ?? productNamesById[item.productId] ?? `Product ${item.productId}`
+    const quantity = getNumericQuantity(item.quantity)
+    const quantityLabel = `x ${formatQuantity(quantity)} ${formatQuantityUnit(product?.quantityUnit, quantity)}`
     const isCompleted = options.completed
 
     return (
       <article className={`${index === 0 && !isCompleted ? 'active' : ''} ${isCompleted ? 'completed' : ''}`.trim()} key={getItemKey(item)}>
         <span>{index + 1}</span>
         <div>
-          <h3>{productName}</h3>
+          <h3>
+            <span className="navigation-step-product-name">{productName}</span>
+            <span className="navigation-step-product-quantity">{quantityLabel}</span>
+          </h3>
           <p>{product?.location?.sectionName || (isCompleted ? 'Collected' : index === 0 ? 'Current destination' : 'Upcoming stop')}</p>
         </div>
         <button

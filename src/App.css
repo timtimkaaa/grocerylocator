@@ -1527,10 +1527,28 @@
 }
 
 .navigation-step-list h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   color: var(--color-text);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.15;
+}
+
+.navigation-step-product-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navigation-step-product-quantity {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .navigation-step-list article.completed h3,
